@@ -23,6 +23,19 @@
 
 *참고: `events/training.webp`, `events/batting.webp`, `events/pitching.webp`는 폴더에 올릴 수 있지만 아직 자동으로 화면에 나오지는 않습니다.*
 
+## 2-1. 특정 시즌 이벤트 4종 개별 이미지 (새로 추가)
+
+다음 파일을 `assets/images/events/`에 올리면 **카테고리 공통 그림보다 우선** 나타납니다. 이미지가 없으면 `categories/`에 있는 기존 공통 이미지로 자동 전환됩니다.
+
+| 파일명 | 뜨는 이벤트 |
+|---|---|
+| `national_team_call.webp` | 국가대표 선발 (아시안게임, WBC, 프리미어12 포함) |
+| `growth_path_choice.webp` | 전문 분야와 성장 방향을 선택하는 이벤트 |
+| `coach_change.webp` | 새로 부임한 코치의 훈련 스타일 요청 |
+| `pitch_tipping_leak.webp` | 상대 팀이 투수의 투구 패턴을 분석한 상황 |
+
+이 네 가지는 이벤트 고유 ID를 사용해 구분하므로 같은 `team`이나 `performance` 카테고리의 다른 장면과도 다른 그림을 보여줄 수 있습니다.
+
 ## 3. 트레이드, 퍼포먼스 등 이벤트 분류 그림
 
 `categories/`에 업로드합니다. 화면의 작은 기호 대신 **넓은 삽화 카드**가 나옵니다.
