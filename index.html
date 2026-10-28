@@ -74,22 +74,20 @@
   ::selection{background:var(--accent);color:var(--accent-ink);}
 
 
-  /* Friendly baseball grounds remain visible behind all existing screens.
-     WebP illustrations are included with the downloadable release bundle;
-     the committed vector scene is a standalone fallback for GitHub Pages. */
+  /* User-managed artwork only: no bundled stock illustration remains.
+     The gradient keeps the UI readable even before backgrounds/stadium.webp is uploaded. */
   body{
     background-image:
-      linear-gradient(rgba(238,244,238,.48),rgba(238,244,238,.57)),
-      url("assets/images/stadium.webp"),
-      url("assets/stadium.svg");
-    background-position:center,center,center;
-    background-size:cover,cover,cover;
-    background-attachment:fixed,fixed,fixed;
+      linear-gradient(rgba(238,244,238,.66),rgba(238,244,238,.73)),
+      url("assets/images/backgrounds/stadium.webp");
+    background-position:center,center;
+    background-size:cover,cover;
+    background-attachment:fixed,fixed;
     background-repeat:no-repeat;
   }
   @media (prefers-color-scheme: dark){
     body{background-image:linear-gradient(rgba(10,18,30,.75),rgba(10,18,30,.79)),
-      url("assets/images/stadium.webp"),url("assets/stadium.svg");}
+      url("assets/images/backgrounds/stadium.webp");}
   }
   .scene-art{margin:4px 0 18px;border-radius:14px;overflow:hidden;box-shadow:0 8px 22px rgba(12,36,39,.12);background:#cce5de;}
   .scene-art img{display:block;width:100%;max-height:275px;aspect-ratio:16/9;object-fit:cover;}
@@ -5372,19 +5370,20 @@
   }
 
 
-  // Stable scene artwork belongs to major milestones only. Never show a random
-  // illustration for every small news event. Missing WebP falls back to SVG.
+  // Special-event illustrations are entirely user-managed.
+  // An empty image folder simply shows no art, never broken-image placeholders.
   function sceneArt(name,alt){
     if(!/^(draft|debut|injury|contract|champion|training|batting|pitching)$/.test(name))return '';
-    return '<figure class="scene-art"><img loading="lazy" src="assets/images/'+name+'.webp"'+
-      ' data-fallback="assets/events/'+name+'.svg" alt="'+esc(alt||'야구 커리어 특별 장면')+'"></figure>';
+    return '<figure class="scene-art"><img loading="lazy" src="assets/images/events/'+name+'.webp"'+
+      ' alt="'+esc(alt||'야구 커리어 특별 장면')+'"></figure>';
   }
   document.addEventListener('error',function(e){
     var image=e.target;
-    if(!image || image.tagName!=='IMG' || !image.dataset || !image.dataset.fallback)return;
-    var fallback=image.dataset.fallback;
-    image.removeAttribute('data-fallback');
-    image.src=fallback;
+    if(!image || image.tagName!=='IMG')return;
+    if(image.closest){
+      var card=image.closest('.scene-art');
+      if(card) card.remove();
+    }
   },true);
 
   /* ---------------- rendering ---------------- */
