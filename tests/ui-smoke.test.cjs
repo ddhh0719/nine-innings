@@ -36,6 +36,8 @@ test('Browser-like career flow renders new hub, detailed stats, training choice 
  assert.ok(!doc.getElementById('screen-hub').classList.contains('hidden'));
  assert.equal(doc.querySelectorAll('.tab-btn').length,6);
  assert.equal(doc.querySelectorAll('#player-card .skill').length,5);
+ assert.ok(doc.querySelector('#player-card .team-logo-slot'),'Team logo slot in player card');
+ assert.equal(doc.querySelectorAll('#tab-home .mindset-item').length,3,'Morale, clubhouse and fan states');
  doc.querySelector('.tab-btn[data-tab="growth"]').click();
  assert.ok(doc.querySelectorAll('#tab-growth .skill').length===5);
  const focus=doc.querySelector('[data-action="set-growth-focus"][data-focus="defense"]');
@@ -45,6 +47,7 @@ test('Browser-like career flow renders new hub, detailed stats, training choice 
  doc.querySelector('.tab-btn[data-tab="life"]').click();
  assert.ok(!doc.getElementById('tab-life').classList.contains('hidden'));
  assert.ok(doc.querySelectorAll('#tab-life .life-item').length>=13);
+ assert.ok(doc.querySelectorAll('#tab-life .life-art-slot').length>=13,'Item artwork slots');
  assert.ok(doc.getElementById('tab-life').textContent.includes('사용 가능 금액'));
  assert.deepEqual(errors,[],'Browser javascript errors');
  dom.window.close();
