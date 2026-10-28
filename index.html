@@ -5354,12 +5354,28 @@
   function eventCategoryVisual(category){
     return EVENT_CATEGORY_VISUAL[category] || EVENT_CATEGORY_VISUAL.default;
   }
-  function renderEventVisual(category){
+  // Specific, frequently occurring stories deserve their own illustration.
+  // All four images are optional. Without one, the category banner is tried,
+  // and only then does the original icon remain visible.
+  var EVENT_SCENE_ART={
+    national_team_call:'national_team_call',
+    wbc_call_up:'national_team_call',
+    premier12_call_up:'national_team_call',
+    growth_path_choice:'growth_path_choice',
+    coach_change:'coach_change',
+    pitch_tipping_leak:'pitch_tipping_leak'
+  };
+  function renderEventVisual(category,eventId){
     var v=eventCategoryVisual(category);
     var key=EVENT_CATEGORY_VISUAL[category]?category:(category==='승부처'||category==='포지션별 경기'?'performance':category==='성장 방향'?'training':'default');
+    var fallback='assets/images/categories/'+key+'.webp';
+    var special=eventId && Object.prototype.hasOwnProperty.call(EVENT_SCENE_ART,eventId);
+    var primary=special?'assets/images/events/'+EVENT_SCENE_ART[eventId]+'.webp':fallback;
     return '<div class="event-visual event-visual-media" style="--ev-color:'+v.color+';--ev-color-bg:'+hex2rgba(v.color,0.16)+';">'+
       '<span class="event-visual-fallback"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">'+v.icon+'</svg></span>'+
-      '<img data-optional-art="category" loading="lazy" alt="'+esc(category||'경기 상황')+' 일러스트" src="assets/images/categories/'+key+'.webp"></div>';
+      '<img data-optional-art="'+(special?'event-specific':'category')+'"'+
+      (special?' data-fallback-src="'+fallback+'"':'')+
+      ' loading="eager" decoding="async" alt="'+esc(category||'경기 상황')+' 일러스트" src="'+primary+'"></div>';
   }
   var DEFAULT_EVENT_COOLDOWN_YEARS = 2;
   function eventOnCooldown(e, p){
@@ -5498,7 +5514,17 @@
   document.addEventListener('error',function(e){
     var image=e.target;
     if(!image || image.tagName!=='IMG')return;
-    if(image.dataset&&image.dataset.optionalArt){image.remove();return;}
+    if(image.dataset&&image.dataset.optionalArt){
+      if(image.dataset.optionalArt==='event-specific' && image.dataset.fallbackSrc){
+        var src=image.dataset.fallbackSrc;
+        image.removeAttribute('data-fallback-src');
+        image.dataset.optionalArt='category';
+        image.src=src;
+        return;
+      }
+      image.remove();
+      return;
+    }
     if(image.closest){
       var card=image.closest('.scene-art');
       if(card) card.remove();
@@ -7769,7 +7795,7 @@
     var specialArt = (ev.id==='injury_rehab_choice'||ev.id==='surgery_rehab_choice')?sceneArt('injury','부상 재활 장면'):'';
     var html = renderSeasonStepIndicator('events')+specialArt+
       '<div class="eyebrow">'+p.careerYears+'년차 시즌 · 이벤트 ('+(sf.eventIndex+1)+'/'+sf.events.length+')</div>'+
-      renderEventVisual(ev.category)+
+      renderEventVisual(ev.category,ev.id)+
       '<span class="event-category-tag">'+esc(ev.category||'시즌 이벤트')+'</span>'+
       '<h2 style="font-size:19px;">'+esc(ev.prompt(p))+'</h2>'+
       '<div class="btn-row" style="flex-direction:column;align-items:stretch;">'+
