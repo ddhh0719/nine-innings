@@ -5719,6 +5719,15 @@
       html += '<hr class="divider"><p class="lede" style="font-size:13px;">첫 시즌을 진행하면 이곳에 소식이 쌓입니다.</p>';
     }
 
+    if(p.positionPlayHistory && p.positionPlayHistory.length){
+      html += '<hr class="divider"><h3 style="font-size:15px;">최근 포지션 플레이</h3>'+
+        p.positionPlayHistory.slice(-3).reverse().map(function(item){
+          return '<div class="log-item"><span class="tag">'+item.year+'년차 · '+esc(item.role)+'</span>'+esc(item.choice)+' · '+(item.success?'성공':'실패')+'</div>';
+        }).join('');
+      var trust=(p.positionReputation||{})[currentPlayRole(p)]||0;
+      html += '<p class="lede" style="font-size:12px;margin-top:7px;">'+esc(currentPlayRole(p))+' 경기 자신감: '+(trust>1?'상승세':trust< -1?'재정비 중':'보통')+'. 최근 플레이 경험이 다음 시즌의 성공 확률에 반영됩니다.</p>';
+    }
+
     html += '<div class="btn-row" style="margin-top:18px;"><button class="btn btn-primary" data-action="start-season">'+p.careerYears+'년차 시즌 시작</button></div>';
 
     var mode=p.progressionMode||'story';
@@ -6763,9 +6772,10 @@
   function buildPositionPlayEvent(p){
     var role=currentPlayRole(p), scene=POSITION_PLAY_SCENES[role];
     if(!scene) return null;
+    var atmosphere=pick(['접전이 계속되는 경기','관중의 함성이 큰 경기','원정 구장에서 펼쳐진 경기','라이벌 팀과의 중요한 경기','선수들의 집중력이 필요한 경기']);
     return {id:'position_play_moment',category:'포지션별 경기',
       playRole:role,
-      prompt:function(pl){return role+' · '+scene.situation;},
+      prompt:function(pl){return atmosphere+' · '+role+' · '+scene.situation;},
       choices:scene.options.map(function(option,idx){
         return {label:option[0],resolve:function(pl,ctx){
           // A position conversion or DH appointment can occur mid-season.
@@ -6773,7 +6783,9 @@
           if(currentPlayRole(pl)!==role) return '시즌 중 역할이 변경되어 해당 수비 상황에는 출전하지 않았습니다.';
           var skill=pl.stats[scene.skill]||50;
           var other=pl.stats.mental||50;
-          var chance=clamp((idx===0?0.39:idx===1?0.57:0.67)+(skill-50)*0.005+(other-50)*0.0015,0.15,0.88);
+          var reputation=pl.positionReputation||{};
+          var historyEdge=clamp((reputation[role]||0)*0.018,-0.12,0.12);
+          var chance=clamp((idx===0?0.39:idx===1?0.57:0.67)+(skill-50)*0.005+(other-50)*0.0015+historyEdge,0.15,0.88);
           var roll=Math.random(), success=roll<chance;
           var key, delta;
           if(scene.pitching){
@@ -6794,6 +6806,8 @@
           ctx.lineBoost[key]=(ctx.lineBoost[key]||0)+delta;
           adjustFan(pl,success?(idx===0?4:2):-1);
           pl.positionPlayHistory=pl.positionPlayHistory||[];
+          pl.positionReputation=pl.positionReputation||{};
+          pl.positionReputation[role]=clamp((pl.positionReputation[role]||0)+(success?1:-1),-7,7);
           pl.positionPlayHistory.push({year:pl.careerYears,role:role,success:success,choice:option[0]});
           if(pl.positionPlayHistory.length>40)pl.positionPlayHistory.shift();
           return success?option[1]:option[2];
