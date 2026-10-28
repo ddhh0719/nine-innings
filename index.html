@@ -133,6 +133,85 @@
   .community-post b{font-size:12px;}.community-post span,.community-post small{font-size:11px;color:var(--ink-dim);}
   .community-post p{font-size:13px;margin:7px 0;line-height:1.7;}
 
+
+  /* Crisp card hierarchy, responsive art surfaces, visually scannable information. */
+  #scoreboard-bar{border-bottom:1px solid var(--line);box-shadow:0 2px 14px rgba(15,38,35,.09);}
+  .sb-logo{font-size:20px;letter-spacing:-.025em;font-weight:900;}
+  #stage{padding-top:23px;}
+  .hub-main>.card{border:1px solid var(--line);}
+  .pc-head{padding:3px 0 13px;border-bottom:1px solid var(--line);}
+  .pc-name{font-size:22px;letter-spacing:-.045em;}
+  .player-card .skill-caption{margin-top:16px;}
+  .stat-line-grid{gap:10px;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));}
+  .stat-line-cell{border-radius:12px;background:var(--surface);padding:14px 9px;}
+  .stat-line-cell .v{font-size:21px;line-height:1.38;}
+  .stat-line-cell .l{font-size:12px;line-height:1.45;margin-top:5px;}
+  .tabbar{background:var(--surface);border-radius:13px;padding:5px;gap:3px;}
+  .tab-btn{border-radius:10px;flex:1 1 auto;}
+  .tab-btn.active{background:var(--bg-elevated);box-shadow:0 2px 7px rgba(10,32,30,.09);}
+  .event-category-tag{font-size:12px;font-weight:800;margin-bottom:12px;}
+  .event-choice-btn{border-width:1px;text-align:left;border-radius:12px;line-height:1.55;}
+  .event-choice-btn:hover{background:var(--surface);}
+  .modal-panel{max-width:720px;border-radius:18px;}
+  .event-visual-media{
+    position:relative;width:100%;height:auto;min-height:100px;aspect-ratio:16/5;
+    border:1px solid var(--line);border-radius:15px;overflow:hidden;margin:4px 0 15px;
+    background:linear-gradient(120deg,var(--ev-color-bg,rgba(110,150,130,.16)),var(--surface));
+  }
+  .event-visual-fallback{display:flex;align-items:center;justify-content:center;width:100%;height:100%;}
+  .event-visual-fallback svg{height:42px;width:42px;opacity:.65;}
+  .event-visual-media>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;visibility:hidden;}
+  .event-visual-media.asset-ready>img{visibility:visible;}
+  .event-visual-media.asset-ready .event-visual-fallback{display:none;}
+  .team-logo-slot{
+    width:52px;height:52px;display:inline-flex;vertical-align:middle;align-items:center;justify-content:center;
+    flex:none;position:relative;overflow:hidden;border-radius:13px;
+    background:var(--logo-accent,#587b72);color:#fff;
+  }
+  .team-logo-fallback{font-weight:900;font-size:20px;}
+  .team-logo-slot>img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;visibility:hidden;}
+  .team-logo-slot.asset-ready>img{visibility:visible;background:var(--bg-elevated);}
+  .team-logo-slot.asset-ready .team-logo-fallback{display:none;}
+  .team-logo-small{height:26px;width:26px;border-radius:6px;}
+  .team-logo-small .team-logo-fallback{font-size:11px;}
+  .team-logo-mini{height:30px;width:30px;border-radius:7px;margin-right:7px;}
+  .team-logo-mini .team-logo-fallback{font-size:12px;}
+  .team-with-logo{display:flex;align-items:center;gap:8px;}
+  .life-art-slot{
+    position:relative;aspect-ratio:4/3;border-radius:10px;overflow:hidden;display:flex;
+    align-items:center;justify-content:center;background:linear-gradient(130deg,var(--surface),var(--bg-elevated));
+    border:1px solid var(--line);margin-bottom:8px;
+  }
+  .life-art-fallback{font-size:14px;font-weight:800;color:var(--ink-dim);}
+  .life-art-slot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;visibility:hidden;}
+  .life-art-slot.asset-ready img{visibility:visible;}
+  .life-art-slot.asset-ready .life-art-fallback{display:none;}
+  .mindset-panel{border:1px solid var(--line);border-radius:15px;background:var(--surface);padding:16px;margin:15px 0;}
+  .section-title,.mindset-top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .section-title h3{font-size:16px;margin:0;}
+  .section-title>span{font-size:11px;color:var(--ink-dim);}
+  .mindset-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px;}
+  .mindset-item{border-radius:9px;background:var(--bg-elevated);padding:11px;}
+  .mindset-top b{font-size:12px;}.mindset-top span{font-size:11px;color:var(--ink-dim);}
+  .mindset-track{height:7px;background:var(--line);overflow:hidden;border-radius:5px;margin-top:9px;}
+  .mindset-track>span{display:block;height:100%;border-radius:5px;background:var(--accent);}
+  .mindset-track .mood-warm{background:var(--turf);}
+  .mindset-track .mood-cold{background:var(--danger);}
+  .mindset-help{font-size:11px;color:var(--ink-dim);margin:11px 0 0;}
+  @media(max-width:800px){.mindset-grid{grid-template-columns:1fr;gap:7px;}}
+  @media(max-width:560px){
+    #stage{padding-top:14px;}
+    .card{padding:17px 15px;margin-bottom:14px;}
+    .stat-line-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .stat-line-cell{padding:10px 6px;}
+    .event-visual-media{aspect-ratio:2.5/1;min-height:92px;}
+    .life-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
+    .life-item{padding:10px;}
+    .life-item h4{font-size:13px;}
+    .life-purchase{align-items:stretch;flex-direction:column;}
+    .life-purchase .btn{width:100%;}
+  }
+
   /* ---------- scoreboard header ---------- */
   #scoreboard-bar{
     position:sticky;top:0;z-index:20;
@@ -2181,7 +2260,7 @@
   // seasons to swing, not one bad event-choice roll, and it mean-reverts on its own once form
   // normalizes rather than being a one-way ratchet.
   var MOMENTUM_DECAY = 0.75;
-  var MOMENTUM_STAT_SWING = 3;   // effective stat points added/subtracted at momentum = +-1
+  var MOMENTUM_STAT_SWING = 1;   // effective stat points added/subtracted at momentum = +-1
   var MOMENTUM_INJURY_SWING = 0.10; // injury-chance delta at momentum = +-1
 
   // Career luck (2026-09, same pass): a hidden -1..1 trait rolled ONCE at debut and held for the
@@ -5272,7 +5351,7 @@
   }
   function renderEventVisual(category){
     var v=eventCategoryVisual(category);
-    var key=EVENT_CATEGORY_VISUAL[category]?category:'default';
+    var key=EVENT_CATEGORY_VISUAL[category]?category:(category==='승부처'||category==='포지션별 경기'?'performance':category==='성장 방향'?'training':'default');
     return '<div class="event-visual event-visual-media" style="--ev-color:'+v.color+';--ev-color-bg:'+hex2rgba(v.color,0.16)+';">'+
       '<span class="event-visual-fallback"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">'+v.icon+'</svg></span>'+
       '<img data-optional-art="category" loading="lazy" alt="'+esc(category||'경기 상황')+' 일러스트" src="assets/images/categories/'+key+'.webp"></div>';
@@ -7621,7 +7700,7 @@
     var gritN=makeupNorm(p,'grit'), clutchN=makeupNorm(p,'clutch'), resilienceN=makeupNorm(p,'resilience');
     var effStats={};
     statList(p.position).forEach(function(s){
-      effStats[s.key]=roundClamp(p.stats[s.key]+(sf.ctx.statBoost[s.key]||0)+momentumIn*MOMENTUM_STAT_SWING+careerLuck*CAREER_LUCK_STAT_SWING+mindset.atmosphere*0.65+mindset.fan*0.45, 10, 99);
+      effStats[s.key]=roundClamp(p.stats[s.key]+(sf.ctx.statBoost[s.key]||0)+mindset.boost+careerLuck*CAREER_LUCK_STAT_SWING, 10, 99);
     });
     var effPlayer={ position:p.position, subrole:p.subrole, stats:effStats, isDH:p.isDH };
     var line, awardScore;
