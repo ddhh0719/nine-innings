@@ -6003,6 +6003,26 @@
         if(fanPost(p,shuffled[k],topic.tone,'시즌',topic.id)){total++;used[topic.id]=true;break;}
       }
     }
+    // Exact-text dedup must never suppress the entire community in a long career.
+    // Anchor extra replies in this year's verified stats and an individual fan angle.
+    if(total<3){
+      var verified=batter
+        ? ['타율 '+formatAvg(line.avg||0),'홈런 '+(line.hr||0)+'개','안타 '+(line.h||0)+'개','도루 '+(line.sb||0)+'개']
+        : ['평균자책점 '+(line.era||0).toFixed(2),'탈삼진 '+(line.k||0)+'개','투구 '+(line.ip||0).toFixed(1)+'이닝','볼넷 '+(line.bb||0)+'개'];
+      var angles=[
+        '숫자만 보면 판단하기 어렵지만 나름 의미 있는 기록이다.',
+        '이 대목은 팬들끼리도 의견이 갈리더라.',
+        '다른 선수와 비교해보면 평가가 또 달라질 것 같다.',
+        '시즌 전체를 놓고 생각해봐야 정확한 평가가 나오겠지.',
+        '작은 변화들이 쌓이면 다음 시즌이 기대될 수도 있다.',
+        '앞으로 어떤 방향으로 성장할지가 궁금하다.'
+      ];
+      for(var extra=0;extra<angles.length&&total<3;extra++){
+        var statText=verified[(extra+year)%verified.length];
+        var text=year+'년차 '+statText+'. '+angles[(extra+year)%angles.length];
+        if(fanPost(p,text,extra%2?'mixed':'positive','시즌','season-stat-'+extra))total++;
+      }
+    }
     return total;
   }
   function recordContractFanPosts(p,narrative){
