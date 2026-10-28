@@ -1451,6 +1451,7 @@
   function migratePlayerData(player){
     if(!player) return;
     if(player.progressionMode===undefined) player.progressionMode='story';
+    if(player.manualGrowthFocus===undefined) player.manualGrowthFocus=null;
     if(player.growthPath===undefined) player.growthPath=null;
     if(player.growthPathBonusApplied===undefined) player.growthPathBonusApplied=false;
     if(player.growthPathChangeAvailable===undefined) player.growthPathChangeAvailable=false;
@@ -2543,7 +2544,8 @@
     var arch=archetypeInfo(player);
     var primaries=(arch && arch.primary && arch.primary.length) ? arch.primary : statList(player.position).map(function(s){ return s.key; });
     var idx=Math.max(0,(player.careerYears||1)-1) % primaries.length;
-    player.growthFocus=primaries[idx];
+    var valid=statList(player.position).some(function(entry){return entry.key===player.manualGrowthFocus;});
+    player.growthFocus=valid?player.manualGrowthFocus:primaries[idx];
     return player.growthFocus;
   }
   // Qualitative stat-tier labels used everywhere a raw stat number used to be shown during a
@@ -5816,7 +5818,7 @@
     var arch=archetypeInfo(p);
     var primaries=(arch && arch.primary && arch.primary.length) ? arch.primary : stats.map(function(s){ return s.key; });
     var focusIdx=Math.max(0,(p.careerYears||1)-1) % primaries.length;
-    var focusKey=primaries[focusIdx];
+    var focusKey=(p.manualGrowthFocus && stats.some(function(st){return st.key===p.manualGrowthFocus;}))?p.manualGrowthFocus:primaries[focusIdx];
     var focusLabel=(stats.filter(function(s){ return s.key===focusKey; })[0]||{}).label || focusKey;
 
     var html = '<div class="eyebrow">프로 '+p.careerYears+'년차</div><h2>'+esc(p.name)+', 새 시즌을 준비합니다</h2>';
@@ -5898,12 +5900,12 @@
     var arch=archetypeInfo(p);
     var primaries=(arch && arch.primary && arch.primary.length) ? arch.primary : stats.map(function(s){ return s.key; });
     var focusIdx=Math.max(0,(p.careerYears||1)-1) % primaries.length;
-    var focusKey=primaries[focusIdx];
+    var focusKey=(p.manualGrowthFocus && stats.some(function(st){return st.key===p.manualGrowthFocus;}))?p.manualGrowthFocus:primaries[focusIdx];
     var focusLabel=(stats.filter(function(s){ return s.key===focusKey; })[0]||{}).label || focusKey;
     var ovr=overall(p);
 
     var html = '<div class="eyebrow">성장</div><h2>'+esc(p.name)+'의 성장 경로</h2>'+
-      '<p class="lede" style="font-size:13px;">세부 능력치는 직접 고르지 않고, 이번 시즌 활약과 이벤트 선택에 따라 자동으로 성장합니다. 선택한 플레이 스타일('+esc(arch?arch.label:'')+')에 맞는 방향으로 집중적으로 커집니다.</p>';
+      '<p class="lede" style="font-size:13px;">세부 능력치를 확인하고 집중 훈련할 항목을 직접 선택할 수 있습니다. 자동 추천은 플레이 스타일을 기준으로 매 시즌 변경됩니다.</p>';
 
     html += '<div class="stat-line-grid" style="margin:14px 0 18px;">'+
       '<div class="stat-line-cell"><div class="v">'+ovr+'</div><div class="l">종합 능력치</div></div>'+
@@ -5911,8 +5913,13 @@
       '<div class="stat-line-cell"><div class="v">'+esc(arch?arch.label:'')+'</div><div class="l">플레이 스타일</div></div>'+
     '</div>';
 
-    html += '<h3 class="life-subhead">능력치별 상세</h3>'+renderStatProfile(p,false);
-    html += primaries.length>1 ? '<p class="lede" style="font-size:12px;">'+esc(arch.label)+' 유형은 ['+primaries.map(function(k){
+    html += '<h3 class="life-subhead">능력치별 상세</h3>'+renderStatProfile(p,false)+
+      '<h3 class="life-subhead">집중 훈련 능력치 선택</h3>'+
+      '<div class="chip-row" style="margin-bottom:12px;">'+
+      '<button class="chip'+(!p.manualGrowthFocus?' selected':'')+'" data-action="set-growth-focus" data-focus="auto">자동 추천</button>'+
+      stats.map(function(st){return '<button class="chip'+(focusKey===st.key&&!!p.manualGrowthFocus?' selected':'')+'" data-action="set-growth-focus" data-focus="'+st.key+'">'+esc(st.label)+'</button>';}).join('')+
+      '</div>';
+    html += p.manualGrowthFocus ? '<p class="lede" style="font-size:12px;">직접 선택한 훈련: <b>'+esc(focusLabel)+'</b></p>' : primaries.length>1 ? '<p class="lede" style="font-size:12px;">'+esc(arch.label)+' 유형은 ['+primaries.map(function(k){
       var lbl=(stats.filter(function(s){ return s.key===k; })[0]||{}).label || k;
       return k===focusKey ? '<b style="color:var(--accent);">'+esc(lbl)+'</b>' : esc(lbl);
     }).join(' → ')+'] 순서로 매 시즌 돌아가며 집중 성장합니다.</p>' :
@@ -8434,7 +8441,7 @@
         injuryArc:null, pendingPostseasonStrategy:null,
         archetype:c.archetype, potentialGrade:rollPotentialGrade(), makeup:rollMakeup(),
         rosterLevel:'1군', futuresYears:0, perks:[], rival:null, progressionMode:'story',
-        growthPath:null, growthPathBonusApplied:false, growthPathChangeAvailable:false, pendingTrainingPlan:'balance',
+        manualGrowthFocus:null, growthPath:null, growthPathBonusApplied:false, growthPathChangeAvailable:false, pendingTrainingPlan:'balance',
         eventHistory:[],
         managerFit:null, rosterCompetitionWon:null, positionFlexible:false,
         mentorBond:0, agentAggressive:false,
@@ -8495,9 +8502,10 @@
     else if(action==='set-progression-mode'){ p.progressionMode=el.getAttribute('data-mode'); }
     else if(action==='set-training-plan'){ p.pendingTrainingPlan=el.getAttribute('data-plan'); }
     else if(action==='set-growth-focus'){
-      // 2026-09: growth focus is now fully automatic (autoAssignGrowthFocus, driven by the
-      // player's archetype) — this branch is a permanent no-op kept only so old test/driver
-      // scripts that still send this action don't error; the manual chip UI has been removed.
+      var chosen=el.getAttribute('data-focus');
+      if(chosen==='auto')p.manualGrowthFocus=null;
+      else if(statList(p.position).some(function(st){return st.key===chosen;}))p.manualGrowthFocus=chosen;
+      autoAssignGrowthFocus(p);
     }
     else if(action==='set-challenge-tier'){
       p.pendingChallengeTier = el.getAttribute('data-tier') || 'normal';
