@@ -198,3 +198,19 @@ test('Fan community reacts to actual player season results without near-term rep
  assert.ok(g.renderFanPosts(p,4).includes('fan-tone'));
  assert.ok(p.fanFeed.every(x=>x.kind==='시즌'));
 });
+
+test('Illustrations match four screenshot scenarios with safe fallback',()=>{
+ const samples=[
+  ['national_team','national_team_call','national_team_call'],
+  ['성장 방향','growth_path_choice','growth_path_choice'],
+  ['team','coach_change','coach_change'],
+  ['performance','pitch_tipping_leak','pitch_tipping_leak']
+ ];
+ for(const [category,eventId,file] of samples){
+  const markup=g.renderEventVisual(category,eventId);
+  assert.match(markup,new RegExp('assets/images/events/'+file+'[.]webp'));
+  assert.match(markup,/data-fallback-src="assets\/images\/categories\//);
+ }
+ assert.match(g.renderEventVisual('performance','other'),/assets\/images\/categories\/performance[.]webp/);
+ assert.match(html,/renderEventVisual\(ev[.]category,ev[.]id\)/);
+});
