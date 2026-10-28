@@ -6,7 +6,7 @@ const found=html.match(/<script>([\s\S]*?)<\/script>/);
 assert.ok(found,'game script exists');
 const js=found[1],end=js.indexOf("  document.addEventListener('click', function(e){");
 assert.ok(end>0);
-const output=js.slice(0,end)+"\n globalThis.__gameTests={BATTER_SUBROLES,PITCHER_SUBROLES,currentPlayRole,buildPositionPlayEvent,buildClutchMomentEvent,isPositionEventEligible,simulateBatterSeason,simulatePitcherSeason,recomputeBatterDerived,recomputePitcherDerived,simulatePostseasonBracket,TEAMS,LIFE_SHOP,purchaseLifeItem,recordSeasonFanPosts,renderFanPosts,POSITION_PLAY_VARIATIONS,CAREER_GOALS};\n})();";
+const output=js.slice(0,end)+"\n globalThis.__gameTests={BATTER_SUBROLES,PITCHER_SUBROLES,currentPlayRole,buildPositionPlayEvent,buildClutchMomentEvent,isPositionEventEligible,simulateBatterSeason,simulatePitcherSeason,recomputeBatterDerived,recomputePitcherDerived,simulatePostseasonBracket,TEAMS,LIFE_SHOP,purchaseLifeItem,recordSeasonFanPosts,renderFanPosts,POSITION_PLAY_VARIATIONS,CAREER_GOALS,autoAssignGrowthFocus};\n})();";
 const sandbox={console,Math:Object.create(Math),document:{addEventListener(){}}};
 sandbox.Math.random=Math.random;sandbox.globalThis=sandbox;
 vm.createContext(sandbox);
@@ -144,4 +144,13 @@ test('Overseas transfers are disabled and pacing has distinct targets',()=>{
  assert.doesNotMatch(html,/id:'overseas_showcase'|id:'overseas_scouting_offer'/);
  assert.ok(!g.CAREER_GOALS.some(x=>x.id==='overseas_bound'));
  assert.match(js,/quick\?randInt\(1,2\):randInt\(4,5\)/);
+});
+
+test('Manual focus is respected and automatic fallback still rotates',()=>{
+ const p=mk('유격수');
+ p.archetype='balanced';
+ p.manualGrowthFocus='defense';
+ assert.equal(g.autoAssignGrowthFocus(p),'defense');
+ p.manualGrowthFocus=null;
+ assert.ok(['power','contact','speed','defense','mental'].includes(g.autoAssignGrowthFocus(p)));
 });
