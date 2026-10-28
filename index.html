@@ -2181,7 +2181,7 @@
   // seasons to swing, not one bad event-choice roll, and it mean-reverts on its own once form
   // normalizes rather than being a one-way ratchet.
   var MOMENTUM_DECAY = 0.75;
-  var MOMENTUM_STAT_SWING = 9;   // effective stat points added/subtracted at momentum = +-1
+  var MOMENTUM_STAT_SWING = 3;   // effective stat points added/subtracted at momentum = +-1
   var MOMENTUM_INJURY_SWING = 0.10; // injury-chance delta at momentum = +-1
 
   // Career luck (2026-09, same pass): a hidden -1..1 trait rolled ONCE at debut and held for the
@@ -2252,6 +2252,35 @@
     if(age<=36) return 0.08;
     return 0.03;
   }
+
+  // A small, season-only influence on performance, separate from permanent stats.
+  // Morale comes from form and life choices; clubhouse atmosphere from team results;
+  // fan pressure from the approval that also determines community reactions.
+  function seasonMindset(p){
+    var morale=clamp((p.momentum||0)+(p.shopSeasonMood||0),-1,1);
+    var rank=p.teamRank||0, record=p.teamRecord||null;
+    var atmosphere=record && (record.wins+record.losses)>0 ?
+      clamp((record.wins-record.losses)/55+(rank?(5.5-rank)/14:0),-1,1) : 0;
+    var crowd=clamp(((p.fanApproval===undefined?50:p.fanApproval)-50)/50,-1,1);
+    // Max two effective stat points, so talent is still the dominant factor.
+    var boost=clamp(morale*1.0+atmosphere*0.65+crowd*0.45,-2,2);
+    return {morale:morale, atmosphere:atmosphere, fan:crowd, boost:boost};
+  }
+  function mindsetLabel(v){
+    return v>0.32?'좋음':v< -0.32?'주의':'보통';
+  }
+  function renderMindsetOverview(p){
+    var m=seasonMindset(p);
+    var info=[['선수 사기',m.morale],['팀 분위기',m.atmosphere],['팬 반응',m.fan]];
+    return '<section class="mindset-panel"><div class="section-title"><h3>경기 준비 상태</h3><span>시즌 성적에 소폭 반영</span></div>'+
+      '<div class="mindset-grid">'+info.map(function(entry){
+        var v=entry[1],n=Math.round((v+1)*50);
+        return '<div class="mindset-item"><div class="mindset-top"><b>'+entry[0]+'</b><span>'+mindsetLabel(v)+'</span></div>'+
+          '<div class="mindset-track"><span style="width:'+n+'%" class="'+(v<-.32?'mood-cold':v>.32?'mood-warm':'')+'"></span></div></div>';
+      }).join('')+'</div>'+
+      '<p class="mindset-help">컨디션, 구단 성적, 팬 반응이 이번 시즌의 실전 능력치에 합산하여 최대 ±2만큼 영향을 줍니다. 영구 능력치는 변하지 않습니다.</p></section>';
+  }
+
   // Growth gets harder to earn the closer a stat sits to its ceiling — no more free ride to 99.
   // chanceBonus lets deliberate, season-long training (a chosen growth focus) succeed more
   // reliably than a one-off event windfall, so picking a focus has a real, felt payoff.
@@ -2760,12 +2789,12 @@
     var growthKeys=growthList.map(function(s){ return s.key; });
     var focusKey=(player.growthFocus && growthKeys.indexOf(player.growthFocus)>-1) ? player.growthFocus : null;
     if(focusKey){
-      for(var fi=0; fi<4; fi++) applyPermanentStatDelta(player, focusKey, 1, 0.35, effectiveFocusCap(player, focusKey));
+      for(var fi=0; fi<3; fi++) applyPermanentStatDelta(player, focusKey, 1, 0.28, effectiveFocusCap(player, focusKey));
     }
     // 2군 성장은 1군과 별도로 튜닝한다 (Phase 2 Item 9): 시도 횟수를 10->8로 살짝 낮춰 "2군은 아직
     // 다듬어지는 단계"라는 페이스 차이를 주되, 아키타입 편향/오프-아키타입 상한은 1군과 동일한 규칙을
     // 그대로 적용해 2군에서부터 이미 아키타입 정체성이 흐려지는 일이 없도록 한다.
-    for(var gi=0; gi<8; gi++){
+    for(var gi=0; gi<6; gi++){
       var gKey=pickGrowthKey(player, growthKeys);
       var gCap=(focusKey && gKey===focusKey) ? effectiveFocusCap(player, focusKey) : archetypeAwareGrowthCap(player, gKey);
       applyPermanentStatDelta(player, gKey, 1, 0, gCap);
@@ -5825,7 +5854,7 @@
     var focusKey=(p.manualGrowthFocus && stats.some(function(st){return st.key===p.manualGrowthFocus;}))?p.manualGrowthFocus:primaries[focusIdx];
     var focusLabel=(stats.filter(function(s){ return s.key===focusKey; })[0]||{}).label || focusKey;
 
-    var html = '<div class="eyebrow">프로 '+p.careerYears+'년차</div><h2>'+esc(p.name)+', 새 시즌을 준비합니다</h2>';
+    var html = '<div class="eyebrow">프로 '+p.careerYears+'년차</div><h2>'+esc(p.name)+', 새 시즌을 준비합니다</h2>'+renderMindsetOverview(p);
 
     html += '<div class="stat-line-grid" style="margin:14px 0 18px;">'+
       '<div class="stat-line-cell"><div class="v">'+esc(focusLabel)+'</div><div class="l">이번 시즌 집중 성장</div></div>'+
@@ -7542,7 +7571,8 @@
     // Momentum going INTO this season reflects how recent seasons actually went (see
     // MOMENTUM_DECAY block above) — it's read here, before this season's own perf updates it
     // further down, so a slump or hot streak actually shapes the season that follows it.
-    var momentumIn = clamp((p.momentum||0)+(p.shopSeasonMood||0),-1,1);
+    var mindset=seasonMindset(p);
+    var momentumIn=mindset.morale;
     p.shopSeasonMood=0;
     if(p.careerLuck===undefined) p.careerLuck=rollCareerLuck(); // best-effort backfill for saves before this existed
     var careerLuck = p.careerLuck||0;
@@ -7550,7 +7580,7 @@
     var gritN=makeupNorm(p,'grit'), clutchN=makeupNorm(p,'clutch'), resilienceN=makeupNorm(p,'resilience');
     var effStats={};
     statList(p.position).forEach(function(s){
-      effStats[s.key]=roundClamp(p.stats[s.key]+(sf.ctx.statBoost[s.key]||0)+momentumIn*MOMENTUM_STAT_SWING+careerLuck*CAREER_LUCK_STAT_SWING, 10, 99);
+      effStats[s.key]=roundClamp(p.stats[s.key]+(sf.ctx.statBoost[s.key]||0)+momentumIn*MOMENTUM_STAT_SWING+careerLuck*CAREER_LUCK_STAT_SWING+mindset.atmosphere*0.65+mindset.fan*0.45, 10, 99);
     });
     var effPlayer={ position:p.position, subrole:p.subrole, stats:effStats, isDH:p.isDH };
     var line, awardScore;
@@ -7731,12 +7761,12 @@
       // reflect defensive training, which used to spiral into starving exactly those specialists
       // of the very training attempts their focus was supposed to guarantee. A dedicated season
       // of training one stat should pay off close to equally no matter which stat it is.
-      var focusAttemptsRaw=clamp(5+sf.perf*2, 3, 7);
+      var focusAttemptsRaw=clamp(3.6+sf.perf*1.5, 2, 6);
       var focusAttempts=roundClamp(focusAttemptsRaw*ageTaper, 0, 8);
       var focusCapNow=effectiveFocusCap(p, focusKey);
       for(var fi=0; fi<focusAttempts; fi++){
         var beforeF=p.stats[focusKey];
-        applyPermanentStatDelta(p, focusKey, 1, 0.4, focusCapNow);
+        applyPermanentStatDelta(p, focusKey, 1, 0.28, focusCapNow);
         if(p.stats[focusKey]>beforeF) focusHits++;
       }
       var focusLabel=growthList.filter(function(s){ return s.key===focusKey; })[0].label;
@@ -7793,8 +7823,8 @@
     // archetypeAwareGrowthCap below), which does most of the actual work fixing "선수가 아키타입과
     // 무관하게 고루 자란다" — a big raw-count cut on top of that risked also dragging down genuinely
     // balanced (올라운드) builds' target OVR, which this channel is still the main driver of.
-    var growthPointsRaw = clamp(17+sf.perf*9, 2, 21);
-    var growthPoints = roundClamp(growthPointsRaw*ageTaper*tpEffects.growthMult, 0, 21);
+    var growthPointsRaw = clamp(12.5+sf.perf*7, 1, 17);
+    var growthPoints = roundClamp(growthPointsRaw*ageTaper*tpEffects.growthMult, 0, 17);
     // Season-challenge success (Phase 15) grants a few extra training attempts on top of the
     // normal growth roll — the reward scales with the difficulty actually chosen.
     if(challengeResult && challengeResult.success) growthPoints += challengeTierInfo.successRewardGrowth;
