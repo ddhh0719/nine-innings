@@ -884,17 +884,16 @@
   // (lineBoost), so the box score always stays internally consistent (avg always matches
   // h/ab, OPS always matches obp+slg, etc).
   function recomputeBatterDerived(line){
-    line.h = Math.max(0, Math.round(line.h));
-    line.hr = Math.max(0, Math.round(line.hr));
-    line.h = Math.max(line.h, line.hr);
+    line.ab = Math.max(0, Math.round(line.ab||0));
+    line.h = Math.min(line.ab, Math.max(0, Math.round(line.h)));
+    line.hr = Math.min(line.h, Math.max(0, Math.round(line.hr)));
     line.doubles = Math.max(0, Math.round(line.doubles));
     line.triples = Math.max(0, Math.round(line.triples));
-    if(line.doubles+line.triples+line.hr > line.h){
-      line.doubles = Math.max(0, line.h-line.hr-line.triples);
-    }
+    line.triples=Math.min(line.triples,Math.max(0,line.h-line.hr));
+    line.doubles=Math.min(line.doubles,Math.max(0,line.h-line.hr-line.triples));
     var singles = Math.max(0, line.h-line.hr-line.doubles-line.triples);
     line.bb = Math.max(0, Math.round(line.bb));
-    line.k = Math.max(0, Math.round(line.k));
+    line.k = Math.min(Math.max(0,line.ab-line.h), Math.max(0, Math.round(line.k)));
     line.tb = singles+line.doubles*2+line.triples*3+line.hr*4;
     line.avg = line.h/(line.ab||1);
     line.obp = clamp((line.h+line.bb)/((line.ab+line.bb)||1),0,1);
@@ -930,7 +929,7 @@
     // Playing time reflects how good the player currently is — a bench bat doesn't
     // get 144 games just because the season has 144 of them.
     var playShare=clamp(0.32+(overall(player)/99)*0.85,0.32,1.0);
-    var games=clamp(Math.round(144*playShare)-missed,15,144);
+    var games=clamp(Math.round(144*playShare)-missed,0,144);
     var ab=Math.round(games*rand(3.3,4.0));
     var varScale=seasonVarianceScale(games);
     // Average is mostly contact, with a smaller assist from speed (leg hits / infield
@@ -1139,9 +1138,14 @@
     line.losses = Math.max(0, Math.round(line.losses));
     line.saves = Math.max(0, Math.round(line.saves));
     line.holds = Math.max(0, Math.round(line.holds||0));
-    line.ip = Math.max(0, Math.round(line.ip*10)/10);
-    line.era = clamp((line.er*9)/(line.ip||1), 0, 15);
-    line.whip = clamp((line.h+line.bb)/(line.ip||1), 0.6, 2.6);
+    var outs=Math.max(0,Math.round((line.ip||0)*3));
+    line.ip=Math.floor(outs/3)+(outs%3)*0.1;
+    var realIp=outs/3;
+    line.era=realIp?Math.max(0,(line.er*9)/realIp):0;
+    line.whip=realIp?Math.max(0,(line.h+line.bb)/realIp):0;
+    line.saves=Math.min(line.saves,line.games||0);
+    line.holds=Math.min(line.holds,Math.max(0,(line.games||0)-line.saves));
+    line.wins=Math.min(line.wins,Math.max(0,(line.games||0)-line.losses));
   }
 
   // Applies an event's direct season-output adjustment (a stolen-base gamble that actually
@@ -3213,7 +3217,7 @@
       condition:function(p){ return true; },
       prompt:function(p){
         return p.position==='pitcher'
-          ? '연장 접전, 감독이 불펜에서 긴급 등판을 요청합니다.'
+          ? (p.subrole==='선발' ? '선발로 등판한 경기의 후반, 주자를 내보내며 위기를 맞았습니다.' : (p.subrole==='마무리' ? '9회 세이브 상황, 팀의 마지막 아웃을 책임져야 합니다.' : '접전 상황, 감독이 불펜에서 긴급 등판을 요청합니다.'))
           : '끝내기 찬스, 감독이 대타 기용을 고민합니다.';
       },
       choices:[
@@ -3843,7 +3847,7 @@
     },
     {
       id:'risky_double_play', category:'performance',
-      condition:function(p){ return p.position==='batter' && !p.isDH; },
+      condition:function(p){ return p.position==='batter' && !p.isDH && ['1루수','2루수','3루수','유격수'].indexOf(p.subrole)>=0; },
       prompt:function(p){ return '수비 상황에서 무리해서 병살을 노릴지, 안전하게 아웃 하나만 잡을지 잦은 판단이 필요합니다.'; },
       choices:[
         { label:'위험을 감수하고 병살을 적극적으로 노린다', resolve:function(p, ctx){
@@ -3903,7 +3907,7 @@
     },
     {
       id:'infield_shift_gamble', category:'performance',
-      condition:function(p){ return p.position==='batter' && !p.isDH; },
+      condition:function(p){ return p.position==='batter' && !p.isDH && ['1루수','2루수','3루수','유격수'].indexOf(p.subrole)>=0; },
       prompt:function(p){ return '상대 타자 성향에 맞춰 극단적인 수비 시프트를 걸지 여부를 결정합니다.'; },
       choices:[
         { label:'과감한 시프트를 건다', resolve:function(p, ctx){
@@ -5227,6 +5231,7 @@
     if(!p.eventHistory) p.eventHistory=[];
     var eligible = EVENT_POOL.filter(function(e){
       if(e.condition && !e.condition(p)) return false;
+      if(!isPositionEventEligible(e,p)) return false;
       return !eventOnCooldown(e, p);
     });
     eligible = eligible.slice().sort(function(){ return Math.random()-0.5; });
@@ -6590,9 +6595,175 @@
   // chases, allstar selection, etc.) which are fine to fold into the auto-summary line.
   // A playable, skill-dependent baseball moment without replacing the existing
   // season engine. The selected strategy gives a small, coherent box-score delta.
+
+  // Position-aware plays: an event is built for the CURRENT defensive position.
+  // This prevents catchers from playing outfield fly balls and starters from
+  // suddenly becoming ninth-inning closers. DHs get batting-only scenes.
+  var POSITION_PLAY_SCENES={
+    '포수': {
+      situation:'2사 3루, 변화구가 홈플레이트 앞에서 크게 바운드합니다. 포수의 판단이 필요한 순간입니다.',
+      skill:'defense',
+      options:[
+        ['몸으로 막고 주자의 움직임을 확인한다','공을 침착하게 블로킹해 3루 주자를 묶었습니다.','포구가 뒤로 빠져 추가 진루를 허용했습니다.'],
+        ['즉시 공을 집어 3루 주자를 견제한다','빠른 송구로 주자를 견제해 위기를 넘겼습니다.','성급한 송구가 빗나가 주자를 진루시켰습니다.'],
+        ['미트를 낮게 두고 안정적으로 처리한다','안정적인 포구와 투수 리드로 위기를 넘겼습니다.','원바운드 공을 처리하는 과정에서 아쉬운 실수가 나왔습니다.']
+      ]
+    },
+    '1루수': {
+      situation:'1사 1루, 3루수가 낮은 땅볼을 잡아 1루로 송구했습니다. 원바운드 공이 다가옵니다.',
+      skill:'defense',
+      options:[
+        ['몸을 뻗어 숏바운드 포구를 노린다','어려운 송구를 걷어 올리며 아웃카운트를 올렸습니다.','바운드를 놓치며 주자가 살아나갔습니다.'],
+        ['베이스에 발을 붙이고 안정적으로 받는다','정확한 포구로 타자주자를 잡았습니다.','공이 미트 끝에 걸리며 타자주자를 살려줬습니다.'],
+        ['송구를 끝까지 보고 자세를 낮춘다','침착한 포구로 실수를 줄였습니다.','자세를 잡는 사이 타자주자의 발이 먼저 닿았습니다.']
+      ]
+    },
+    '2루수': {
+      situation:'1사 1루, 2루 베이스 쪽으로 빠른 땅볼이 굴러옵니다. 병살 연결이 가능한 상황입니다.',
+      skill:'defense',
+      options:[
+        ['공을 잡자마자 유격수에게 빠르게 연결한다','빠른 토스로 병살 연결에 성공했습니다.','무리한 토스가 빗나가 추가 진루를 허용했습니다.'],
+        ['우선 2루에서 선행주자를 확실히 잡는다','선행주자를 안전하게 포스아웃 처리했습니다.','베이스 커버가 어긋나 아웃카운트를 얻지 못했습니다.'],
+        ['몸으로 공을 막아 단타를 차단한다','타구를 끝까지 막아 추가 진루를 막았습니다.','공이 글러브를 튕겨 나가 아쉬운 출루를 허용했습니다.']
+      ]
+    },
+    '3루수': {
+      situation:'1사 2루, 3루선 근처로 날카로운 강습 타구가 향합니다.',
+      skill:'defense',
+      options:[
+        ['몸을 날려 3루선 타구를 막는다','몸을 날린 다이빙 캐치로 안타성 타구를 지웠습니다.','타구가 글러브를 맞고 튀어 주자가 진루했습니다.'],
+        ['정면에서 기다려 확실하게 송구한다','침착하게 타구를 잡아 1루 송구에 성공했습니다.','타구의 바운드를 놓쳐 출루를 허용했습니다.'],
+        ['파울라인을 지키며 반응한다','3루선을 단단히 지켜 장타를 차단했습니다.','빠른 타구가 미트를 스치며 외야로 빠졌습니다.']
+      ]
+    },
+    '유격수': {
+      situation:'2사 1루, 3유간 깊숙한 곳으로 땅볼이 지나갑니다.',
+      skill:'defense',
+      options:[
+        ['깊은 타구를 잡아 강한 1루 송구를 한다','넓은 수비 범위와 강한 송구로 어려운 아웃을 만들었습니다.','어려운 자세의 송구가 빗나가 타자주자가 살아나갔습니다.'],
+        ['안정적으로 잡아 2루에서 선행주자를 노린다','정확한 포스플레이로 이닝을 마무리했습니다.','2루 송구가 늦어 선행주자를 잡지 못했습니다.'],
+        ['낮은 자세로 공부터 확실히 잡는다','침착한 포구로 실점을 막았습니다.','바운드가 튀면서 공이 글러브 밖으로 빠졌습니다.']
+      ]
+    },
+    '좌익수': {
+      situation:'1사 2루, 좌익수 앞에 안타가 떨어지고 2루 주자가 홈을 향해 뜁니다.',
+      skill:'defense',
+      options:[
+        ['포구 후 홈으로 강한 송구를 한다','좌익수의 정확한 홈 송구로 주자를 잡았습니다.','송구가 크게 벗어나 추가 진루를 허용했습니다.'],
+        ['중계 플레이를 통해 홈 승부를 준비한다','내야 중계수에게 정확히 연결해 실점을 막았습니다.','중계가 늦어 주자가 홈을 밟았습니다.'],
+        ['타구를 안전하게 처리해 추가 진루를 막는다','빠른 처리로 타자주자의 추가 진루를 막았습니다.','타구를 더듬어 주자에게 한 베이스를 내줬습니다.']
+      ]
+    },
+    '중견수': {
+      situation:'2사 1루, 우중간으로 깊은 뜬공이 날아갑니다. 중견수의 수비 범위가 시험대에 올랐습니다.',
+      skill:'defense',
+      options:[
+        ['낙구 지점을 향해 전력 질주한다','우중간 깊은 뜬공을 멋지게 잡아 이닝을 끝냈습니다.','타구 판단이 늦어 공이 글러브 밖으로 떨어졌습니다.'],
+        ['펜스와의 거리를 확보하며 따라간다','펜스 직전 타구를 안전하게 포구했습니다.','펜스를 의식하는 사이 타구가 떨어졌습니다.'],
+        ['타구의 회전을 판단해 최적 경로로 이동한다','정확한 낙구 판단으로 어려운 외야 플라이를 처리했습니다.','바람을 잘못 읽어 공이 뒤로 빠졌습니다.']
+      ]
+    },
+    '우익수': {
+      situation:'1사 1루, 우익선 깊숙한 타구에 1루 주자가 3루를 노립니다.',
+      skill:'defense',
+      options:[
+        ['빠르게 포구한 뒤 3루에 직접 송구한다','우익수의 강견으로 3루를 노린 주자를 잡았습니다.','무리한 장거리 송구가 빗나가 추가 진루를 내줬습니다.'],
+        ['2루수에게 중계해 정확도를 높인다','중계 플레이가 정확하게 연결되어 주자를 묶었습니다.','중계 타이밍이 늦어 3루 진루를 허용했습니다.'],
+        ['안전한 펜스 플레이로 타구부터 처리한다','우익선 타구를 안정적으로 처리했습니다.','타구 처리에 시간이 걸려 추가 진루를 허용했습니다.']
+      ]
+    },
+    '지명타자': {
+      situation:'8회 2사 2루, 지명타자로 타석에 들어섭니다. 타격 전략을 결정해야 합니다.',
+      skill:'contact', bat:true,
+      options:[
+        ['안타를 노리고 밀어친다','반대 방향 적시타로 주자를 불러들였습니다.','잘 맞은 타구가 야수 정면으로 향해 아웃됐습니다.'],
+        ['장타를 노리고 강하게 스윙한다','깊은 장타로 주자를 홈으로 불러들였습니다.','큰 스윙이 빗나가 삼진으로 물러났습니다.'],
+        ['볼을 골라 출루에 집중한다','끈질긴 승부 끝에 볼넷으로 출루했습니다.','좋은 공을 놓쳐 삼진으로 물러났습니다.']
+      ]
+    },
+    '선발': {
+      situation:'6회 2사 2루, 선발 등판을 이어가던 중 중심 타자를 상대합니다.',
+      skill:'control', pitching:true,
+      options:[
+        ['결정구로 삼진을 노린다','날카로운 결정구로 삼진을 잡고 이닝을 끝냈습니다.','승부구가 몰려 안타를 허용했습니다.'],
+        ['낮은 공으로 땅볼을 유도한다','낮은 코스 승부로 땅볼 아웃을 만들었습니다.','타자가 공을 걷어 올려 안타를 만들었습니다.'],
+        ['볼넷을 경계해 제구에 집중한다','스트라이크존 구석을 찔러 범타를 유도했습니다.','카운트가 불리해지며 볼넷을 허용했습니다.']
+      ]
+    },
+    '불펜': {
+      situation:'7회 1사 1, 2루, 구원 등판해 위기를 끊어야 합니다.',
+      skill:'breaking', pitching:true,
+      options:[
+        ['변화구로 삼진을 노린다','헛스윙 삼진으로 위기를 줄였습니다.','변화구가 빠져나가 볼넷을 허용했습니다.'],
+        ['낮은 코스로 병살타를 유도한다','땅볼 병살타를 유도해 불을 껐습니다.','타구가 내야 사이를 빠져나가 안타를 허용했습니다.'],
+        ['스트라이크를 먼저 잡으며 승부한다','유리한 카운트로 범타를 유도했습니다.','빠른 승부가 장타를 허용했습니다.']
+      ]
+    },
+    '마무리': {
+      situation:'9회 2사 2루, 한 점 차 리드를 지키기 위한 마무리 투구입니다.',
+      skill:'velocity', pitching:true,
+      options:[
+        ['강속구로 정면 승부한다','강속구로 헛스윙 삼진을 잡고 세이브 상황을 마무리했습니다.','강속구가 가운데로 몰려 안타를 허용했습니다.'],
+        ['변화구로 타자의 타이밍을 빼앗는다','결정적인 변화구로 마지막 아웃을 잡았습니다.','변화구가 존을 벗어나 볼넷을 허용했습니다.'],
+        ['볼넷을 경계해 코너워크에 집중한다','정교한 제구로 땅볼 아웃을 유도했습니다.','실투가 나와 안타를 허용했습니다.']
+      ]
+    }
+  };
+
+  function currentPlayRole(p){
+    return p.position==='pitcher' ? (PITCHER_SUBROLES.indexOf(p.subrole)!==-1?p.subrole:'불펜')
+      : (p.isDH?'지명타자':(BATTER_SUBROLES.indexOf(p.subrole)!==-1?p.subrole:'1루수'));
+  }
+  function buildPositionPlayEvent(p){
+    var role=currentPlayRole(p), scene=POSITION_PLAY_SCENES[role];
+    if(!scene) return null;
+    return {id:'position_play_moment',category:'포지션별 경기',
+      playRole:role,
+      prompt:function(pl){return role+' · '+scene.situation;},
+      choices:scene.options.map(function(option,idx){
+        return {label:option[0],resolve:function(pl,ctx){
+          // A position conversion or DH appointment can occur mid-season.
+          // Revalidate at resolution; never narrate an out-of-position play.
+          if(currentPlayRole(pl)!==role) return '시즌 중 역할이 변경되어 해당 수비 상황에는 출전하지 않았습니다.';
+          var skill=pl.stats[scene.skill]||50;
+          var other=pl.stats.mental||50;
+          var chance=clamp((idx===0?0.39:idx===1?0.57:0.67)+(skill-50)*0.005+(other-50)*0.0015,0.15,0.88);
+          var roll=Math.random(), success=roll<chance;
+          var key, delta;
+          if(scene.pitching){
+            key = idx===0?'k':idx===1?'er':'bb';
+            delta=success?(idx===0?1:idx===1?-1:-1):(idx===0?'h':idx===1?'h':'bb');
+          } else if(scene.bat){
+            key=idx===0?'h':idx===1?'h':'bb';
+            delta=success?1:0;
+            if(!success){key='k';delta=1;}
+            if(success && idx===0) ctx.lineBoost.rbi=(ctx.lineBoost.rbi||0)+1;
+            if(success && idx===1) ctx.lineBoost.rbi=(ctx.lineBoost.rbi||0)+1;
+          } else { key='errors';delta=success?-1:1; }
+          ctx.lineBoost[key]=(ctx.lineBoost[key]||0)+delta;
+          adjustFan(pl,success?(idx===0?4:2):-1);
+          pl.positionPlayHistory=pl.positionPlayHistory||[];
+          pl.positionPlayHistory.push({year:pl.careerYears,role:role,success:success,choice:option[0]});
+          if(pl.positionPlayHistory.length>40)pl.positionPlayHistory.shift();
+          return success?option[1]:option[2];
+        }};
+      })};
+  }
+
+  // Filter generic fielding events by the actual defensive assignment.
+  function isPositionEventEligible(event,p){
+    if(!event || !p) return false;
+    var role=currentPlayRole(p);
+    if(event.id==='risky_double_play' || event.id==='infield_shift_gamble')
+      return p.position==='batter' && ['1루수','2루수','3루수','유격수'].indexOf(role)!==-1;
+    if(event.id==='clutch_moment' && p.position==='pitcher' && p.subrole==='선발')
+      return true; // prompt explicitly uses an in-game starter situation below
+    return true;
+  }
+
   function buildClutchMomentEvent(p){
     var isBatter=p.position==='batter';
-    var inning=isBatter?randInt(7,9):(p.subrole==='마무리'?9:(p.subrole==='선발'?6:8));
+    var inning=isBatter?randInt(7,9):(p.subrole==='마무리'?9:(p.subrole==='선발'?randInt(5,7):randInt(6,8)));
     var situation=isBatter?pick(['2사 2루','1사 1, 3루','2사 만루']):pick(['1사 2, 3루','2사 만루','무사 1, 2루']);
     function bump(ctx, key, amount){
       ctx.lineBoost[key]=(ctx.lineBoost[key]||0)+amount;
@@ -6619,7 +6790,7 @@
         ]};
     }
     return {id:'clutch_game_moment',category:'승부처',
-      prompt:function(pl){return inning+'회 '+situation+', '+pl.name+'이(가) 위기에 등판해 타자를 상대합니다. 어떤 투구를 선택하겠습니까?';},
+      prompt:function(pl){return inning+'회 '+situation+', '+pl.name+(pl.subrole==='선발'?'이(가) 선발 등판을 이어가며':'이(가) 구원 등판해')+' 타자를 상대합니다. 어떤 투구를 선택하겠습니까?';},
       choices:[
         {label:'결정구로 삼진을 노린다',resolve:function(pl,ctx){
           var chance=clamp(0.18+(pl.stats.velocity/99)*0.21+(pl.stats.breaking/99)*0.21,0.16,0.66);
@@ -6646,9 +6817,9 @@
     agent_change_longterm_deal:1, agent_strategy:1,
     overseas_scouting_offer:1,
     contract_year_pressure:1, front_office_meeting:1,
-    injury_rehab_choice:1, clutch_game_moment:1
+    injury_rehab_choice:1, clutch_game_moment:1, position_play_moment:1
   };
-  var MAX_SEASON_MANUAL_EVENTS=4;
+  var MAX_SEASON_MANUAL_EVENTS=5;
   function beginSeasonEvents(){
     var p=state.player;
     var picked=pickSeasonEvents(p); // { manual:[1 major + 1-2 minor], auto:[leftover eligible, auto-resolved] }
@@ -6670,6 +6841,10 @@
     if(tournamentEvent) prepend.push(tournamentEvent);
     // Keep mandatory medical/military decisions ahead of the baseball moment.
     if(prepend.length<MAX_SEASON_MANUAL_EVENTS) prepend.push(buildClutchMomentEvent(p));
+    if(prepend.length<MAX_SEASON_MANUAL_EVENTS){
+      var roleMoment=buildPositionPlayEvent(p);
+      if(roleMoment) prepend.push(roleMoment);
+    }
     var manualSlots=Math.max(0, MAX_SEASON_MANUAL_EVENTS - prepend.length);
     if(manual.length>manualSlots){ auto=auto.concat(manual.splice(manualSlots)); }
     var events=prepend.concat(manual);
