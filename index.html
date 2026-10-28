@@ -212,6 +212,11 @@
     .life-purchase .btn{width:100%;}
   }
 
+  .fan-meta{display:flex;align-items:center;gap:10px;justify-content:flex-end;}
+  .fan-tone{border:1px solid var(--line);padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700;}
+  .fan-tone.positive{color:var(--turf);}
+  .fan-tone.critical{color:var(--danger);}
+  .fan-tone.mixed{color:var(--ink-dim);}
   /* ---------- scoreboard header ---------- */
   #scoreboard-bar{
     position:sticky;top:0;z-index:20;
@@ -5840,74 +5845,200 @@
   }
 
 
-  // Community reactions are actual saved content, not a raw hidden 0-100 meter.
-  var FAN_NICKNAMES=['직관러27','파란유니폼','야구보는직장인','응원석3열','오늘도9회','수비장인팬','원정도간다','시즌권러','느린커브','중계보다직관','풀카운트'];
-  function fanPost(p,text,tone,kind){
+
+  // Community threads are generated from actual season events, not a tiny
+  // fixed pool. Saved posts never change simply because the tab was reopened.
+  var FAN_NICKNAMES=['직관러27','파란유니폼','야구보는직장인','응원석3열','오늘도9회','수비장인팬','원정도간다','시즌권러','느린커브','중계보다직관','풀카운트','불꽃응원','스코어북덕후','원정버스막차','볼넷이좋아','흙묻은유니폼','야구장소풍','기록실지박령','트레이드관심러','하이라이트수집가'];
+  var FAN_TONES=['positive','mixed','critical'];
+  function fanPost(p,text,tone,kind,topic){
     migratePlayerData(p);
-    var entry={year:p.careerYears,kind:kind||'시즌',by:pick(FAN_NICKNAMES),tone:tone||'neutral',text:text,likes:randInt(2,320)};
+    var recent=(p.fanFeed||[]).slice(-45);
+    if(recent.some(function(post){return post.text===text;}))return null;
+    var nicknamePool=FAN_NICKNAMES.filter(function(n){return !recent.slice(-3).some(function(post){return post.by===n;});});
+    var entry={
+      year:p.careerYears,kind:kind||'시즌',by:pick(nicknamePool.length?nicknamePool:FAN_NICKNAMES),
+      tone:FAN_TONES.indexOf(tone)>=0?tone:'mixed',text:text,topic:topic||'general',
+      likes:randInt(1,Math.max(30,Math.round(50+(p.fanApproval||50)*3)))
+    };
     p.fanFeed.push(entry);
-    if(p.fanFeed.length>100)p.fanFeed.splice(0,p.fanFeed.length-100);
+    if(p.fanFeed.length>120)p.fanFeed.splice(0,p.fanFeed.length-120);
     return entry;
   }
+  function addFanTopic(pool,id,tone,lines){
+    if(!lines||!lines.length)return;
+    pool.push({id:id,tone:tone,lines:lines});
+  }
   function recordSeasonFanPosts(p,line,awards){
-    var batter=p.position==='batter';
-    var good=batter?((line.ops||0)>=.85||(line.hr||0)>=25):((line.era||99)<3.4||((line.k||0)>=150));
-    var bad=batter?((line.avg||0)<.225):((line.era||0)>5.3 && (line.ip||0)>30);
-    var posts=[];
-    if(good){
-      posts.push(pick(['오늘 활약 진짜 대단하다. 이런 경기는 오래 기억날 듯!','올해 성장한 게 눈에 보인다. 다음 시즌도 기대한다.','그라운드에서 자신감이 느껴지더라. 정말 든든하다.']));
-    }else if(bad){
-      posts.push(pick(['최근 경기 내용이 너무 아쉽다. 다시 올라와 줬으면.','팬으로서는 답답하지만 반등할 기회는 아직 있다.','지금은 결과가 안 나와도 훈련한 만큼 보여주길.']));
-    }else{
-      posts.push(pick(['시즌 내내 꾸준히 뛰어준 건 인정해야지.','화려하진 않아도 이런 선수가 팀에 꼭 필요하다.','성적도 중요하지만 내년엔 더 좋은 모습을 보고 싶다.']));
-    }
+    var batter=p.position==='batter', prev=p.history&&p.history.length?p.history[p.history.length-1]:null;
+    var old=prev&&prev.line;
+    var pool=[],year=p.careerYears,club=p.team&&p.team.name||'구단';
+    var qualifies=batter?(line.ab||0)>=300:(line.ip||0)>=45;
+    var great=batter?((line.ops||0)>=.88||(line.hr||0)>=30):
+      ((line.era||99)<3.25&&(line.ip||0)>=65)||(line.k||0)>=150;
+    var poor=batter?((line.avg||0)<.220&&qualifies):
+      ((line.era||0)>5.25&&qualifies);
+    var seasonAvg=batter?formatAvg(line.avg||0):(line.era||0).toFixed(2);
+    var metric=batter?'타율':'ERA';
+    var role=p.subrole||'선수';
+    addFanTopic(pool,'season-overall',great?'positive':poor?'critical':'mixed',great?
+      [metric+' '+seasonAvg+'이라니! '+club+'에서 올해 제일 기대한 장면이었다.',
+       '올해는 보는 재미가 있었다. '+role+'로 이만큼 해주면 정말 든든하지.',
+       '시즌 기록 다시 봤는데 놀랍다. 이 정도 성적이면 칭찬받아야지.',
+       '올해 활약을 생각하면 다음 시즌 기대치를 올려도 되겠어.']:
+      poor?['기록표 보고 마음이 복잡해졌다. '+metric+' '+seasonAvg+'는 확실히 아쉬워.',
+        '작년부터 응원했는데 이번 시즌은 좀 힘들다. 반등해 주길.',
+        '결과가 안 나올 때도 있지. 다만 내년에는 달라진 모습을 보여줬으면.',
+        '경쟁이 치열한 리그라 더 아쉽다. 스스로 돌파구를 찾기를.']:
+      ['올해 '+metric+' '+seasonAvg+'. 기대만큼은 아니어도 분명한 역할을 했다.',
+       '커리어는 한 시즌으로 끝나지 않아. 이런 해도 필요하지.',
+       '시즌 전체를 보면 좋았던 날도 아쉬운 날도 있었네.',
+       '내년엔 조금 더 꾸준하게 가면 팀에 큰 도움이 될 것 같다.']);
     if(batter){
-      posts.push((line.hr||0)>=20?pick(['장타가 경기 분위기를 완전히 바꾸네.','홈런 장면만 다시 보고 있다.']):
-        pick(['타석에서 더 침착해졌으면 한다.','요즘 공 골라내는 모습이 점점 나아지는 듯.']));
-      if((line.errors||0)>10)posts.push('수비 집중력은 확실히 개선이 필요하다.');
-      else if((p.stats.defense||0)>=75)posts.push('오늘도 안정적인 수비, 보이지 않는 공헌이 크다.');
+      addFanTopic(pool,'hitting-avg',(line.avg||0)>=.285?'positive':'mixed',
+        (line.avg||0)>=.285?[
+          '타율 '+seasonAvg+'이면 컨택 감각이 상당히 좋았다는 거 아닌가?',
+          '올해는 방망이가 공을 잘 따라간 것 같아. 타율 '+seasonAvg+' 인정!',
+          '잔루 상황에서 필요한 건 결국 정확한 타격이지. 올해 타격은 칭찬해.']:
+        ['타율 '+seasonAvg+'라서 아쉬운 타석도 많았겠지만 내년엔 올라오겠지.',
+         '타격 정확도가 더 올라오면 타선이 훨씬 강해질 듯.',
+         '잘 맞은 타구가 안타가 안 되는 날도 있었을 거야. 다음 시즌 기대.']);
+      if((line.hr||0)>=12)addFanTopic(pool,'power','positive',[
+        '홈런 '+line.hr+'개라니, 장타가 나오면 분위기가 확 살아난다!',
+        '올해 '+line.hr+'홈런이면 파워 훈련이 헛되지 않았네.',
+        '큰 타구가 나올 때마다 관중석 분위기가 다르더라.']);
+      if((line.sb||0)>=10)addFanTopic(pool,'speed','positive',[
+        '도루 '+line.sb+'개면 배터리가 계속 신경 쓰였겠다. 주루가 좋다.',
+        '발로 만든 기회도 많네. '+line.sb+'도루의 가치를 알아야 한다.']);
+      if(!p.isDH){
+        addFanTopic(pool,'fielding',(line.errors||0)>=10?'critical':'positive',(line.errors||0)>=10?[
+          '실책 '+line.errors+'개는 조금 아쉬워. '+role+' 수비부터 다시 다듬자.',
+          '공격도 중요하지만 '+role+'라면 수비 실수를 줄일 필요가 있어.',
+          '수비 훈련이 필요한 시즌이었네. 다음에는 좀 더 안정적으로.']:[
+          '올해 '+role+' 수비 안정감이 괜찮았다. 보이지 않는 공헌이 있다.',
+          '타격 기록만 볼 게 아니라 '+role+' 수비도 평가해야 해.',
+          '큰 실수 없이 자기 자리 지켜주는 게 정말 중요하지.']);
+      }
     }else{
-      posts.push((line.k||0)>=100?pick(['결정구 위력이 확실히 살아 있다.','삼진 잡는 장면은 정말 짜릿해.']):
-        pick(['위기에서의 제구를 더 보고 싶다.','투수 운영이 점점 안정되는 느낌이다.']));
-      if(p.subrole==='마무리')posts.push('9회가 되면 심장이 너무 빨리 뛴다. 마무리 믿는다!');
-      else if(p.subrole==='선발')posts.push('선발투수가 이닝을 버텨주면 팀 전체가 편해진다.');
-      else posts.push('중간계투가 버텨줘야 뒷문까지 갈 수 있다.');
+      if((line.k||0)>=75)addFanTopic(pool,'strikeout','positive',[
+        '탈삼진 '+line.k+'개! 승부구가 살아 있다는 증거지.',
+        '올해는 삼진 잡는 능력이 확실히 보인다. '+line.k+'K 대단하네.',
+        '타자들이 결정구에 계속 타이밍을 뺏기더라.']);
+      if((line.bb||0)>=30)addFanTopic(pool,'control',(line.bb||0)>=70?'critical':'mixed',[
+        '볼넷이 '+line.bb+'개라 제구를 좀 더 잡아야 할 것 같다.',
+        '볼넷만 줄여도 투구 내용이 훨씬 좋아질 텐데.',
+        '투수는 좋은 구위도 중요하지만 제구도 꼭 필요하지.']);
+      if(role==='선발')addFanTopic(pool,'starter','mixed',[
+        '선발로 '+(line.ip||0).toFixed(1)+'이닝을 책임진 건 의미가 크다.',
+        '선발은 하루만 잘 던져선 안 되지. 로테이션을 버티는 것부터 중요해.',
+        '선발투수의 가치는 긴 이닝을 소화할 때 더 크게 느껴져.']);
+      if(role==='불펜')addFanTopic(pool,'bullpen','mixed',[
+        (line.holds||0)+'홀드. 불펜의 고생은 기록만 보고 지나치기 쉽지.',
+        '위험한 이닝에 올라가야 하는 불펜투수에게 박수를.',
+        '중간에서 흐름 끊어주는 역할이 쉬운 줄 아나.']);
+      if(role==='마무리')addFanTopic(pool,'closer',(line.saves||0)>=20?'positive':'mixed',[
+        '세이브 '+(line.saves||0)+'개. 9회는 늘 긴장되지만 기대하게 된다.',
+        '마무리에게 가장 필요한 건 결국 마지막 아웃카운트.',
+        '9회에 올라오는 순간 분위기부터 달라진다.']);
     }
-    if((awards||[]).length)posts.push('수상 축하! '+awards.slice(0,2).join(', ')+' 받을 만했다.');
-    if(line.injury)posts.push('부상 소식은 너무 속상하다. 완전히 회복하고 돌아오길.');
-    var spending=(p.lifeLedger||[]).filter(function(x){return x.year===p.careerYears;});
+    if(old){
+      var currentRate=batter?(line.ops||0):(line.era||0);
+      var priorRate=batter?(old.ops||0):(old.era||0);
+      var delta=currentRate-priorRate;
+      if(Math.abs(delta)>=(batter?.045:.60)){
+        var better=batter?delta>0:delta<0;
+        addFanTopic(pool,'year-comparison',better?'positive':'critical',better?
+          ['작년 성적이랑 비교하면 변화가 확실하다. 훈련 효과가 있었나 봐.',
+           '전년 대비 지표가 좋아졌네. 이런 상승세가 오래갔으면!',
+           '작년보다 나아진 게 보여서 더 응원하게 된다.']:
+          ['작년이랑 비교하니 숫자가 조금 내려왔네. 조정이 필요해 보여.',
+           '작년 페이스를 기대했는데 이번 시즌은 아쉽다.',
+           '하락세를 끊고 반등해야 할 시점인 것 같다.']);
+      }
+    }
+    if((awards||[]).length)addFanTopic(pool,'awards','positive',[
+      (awards[0]||'개인상')+' 수상! 올해 보상 제대로 받았다.',
+      '수상 소식은 언제 들어도 좋네. '+awards.slice(0,2).join('·')+' 축하!',
+      '시상식에서 이름이 불릴 때 정말 뿌듯했겠다.']);
+    if(line.injury)addFanTopic(pool,'injury','mixed',[
+      '부상 이후 복귀한 것만으로도 응원한다. 다시 무리하지 않았으면.',
+      '이번 부상은 팬으로서 마음이 안 좋았다. 건강이 최우선이지.',
+      '조급하게 서두르지 말고 컨디션 회복부터 잘하길.']);
+    if((p.teamRank||11)<=3)addFanTopic(pool,'team','positive',[
+      club+'의 상위권 싸움에 보탬이 됐다는 점이 좋다.',
+      '팀 순위까지 좋으니까 경기 보는 맛이 난다. 이 분위기 계속되길.',
+      '올해 '+club+' 성적도 좋았고 선수도 더 성장했으면.']);
+    else if((p.teamRank||0)>=8)addFanTopic(pool,'team','critical',[
+      '팀 순위가 아쉽다. '+club+'에 더 많은 승리가 필요해.',
+      '개인 성적만큼 구단 성적도 중요하잖아. 내년엔 올라가길.',
+      '팀이 어려울수록 중심 잡아주는 선수가 필요하다.']);
+    var spending=(p.lifeLedger||[]).filter(function(x){return x.year===year;});
     if(spending.length){
       var last=spending[spending.length-1];
-      if(last.id==='charity'||last.id==='fanmeet')posts.push('경기장 밖에서도 팬들을 생각해 주는 모습 보기 좋다!');
-      else if(last.id==='club')posts.push('비시즌에 그렇게 큰 파티를 해야 했나? 자기 관리가 걱정된다.');
-      else if(last.price>=10000)posts.push('고가 장비 투자가 경기력으로 증명되면 좋겠다.');
-      else posts.push('새로운 준비를 했다던데 내년에 어떤 변화가 있을지 궁금하다.');
+      addFanTopic(pool,'life-'+last.id,(last.id==='club'||last.id==='sports_car')?'critical':'mixed',[
+        last.label+' 소식 봤다. 경기장 밖 생활도 관심이 가네.',
+        last.label+'에 돈을 썼다던데, 선택이 경기력에도 좋은 영향을 줬으면.',
+        last.price>=10000?'비싼 투자라 조금 놀랐다. 성적으로 답할 수 있길.':'자기만의 방법으로 컨디션을 관리하네.']);
+      if(last.id==='charity'||last.id==='fanmeet')addFanTopic(pool,'fan-service','positive',[
+        '팬들과의 약속을 지킨 모습이 멋있다. 이런 선수는 오래 기억하지.',
+        '경기 외에도 지역과 팬들을 생각해주니 보기 좋다.']);
     }
-    if((p.fanApproval||50)<30)posts.push('팬심은 무한하지 않다. 다음 시즌에는 달라진 모습을 보여줘.');
-    else if((p.fanApproval||50)>75)posts.push('우리 팀의 얼굴 같은 선수. 오래 함께하자!');
-    posts=posts.slice(0,6);
-    posts.forEach(function(t){fanPost(p,t,/걱정|아쉽|답답|속상|개선|달라진/.test(t)?'mixed':'positive','시즌');});
-    return posts.length;
+    if((p.fanApproval||50)<33)addFanTopic(pool,'approval','critical',[
+      '분위기가 좋지 않다는 걸 본인도 느낄 것 같다. 실력으로 보여주자.',
+      '응원은 하지만 아직 설득할 게 많아 보여. 좋은 시즌을 기다릴게.']);
+    if((p.fanApproval||50)>78)addFanTopic(pool,'approval','positive',[
+      '사람들이 이 선수를 좋아하는 이유가 있다. 오래 보고 싶다!',
+      '유니폼에 이름 새겨도 후회 없을 것 같다.']);
+    // Reward current context; don't flood one screen with every matching topic.
+    for(var i=pool.length-1;i>0;i--){var j=randInt(0,i),tmp=pool[i];pool[i]=pool[j];pool[j]=tmp;}
+    var used={};var total=0,target=randInt(3,5);
+    for(var z=0;z<pool.length&&total<target;z++){
+      var topic=pool[z];if(used[topic.id])continue;
+      var recentTopics=(p.fanFeed||[]).slice(-22).filter(function(t){return t.year>=year-2;}).map(function(t){return t.topic;});
+      if(recentTopics.indexOf(topic.id)>=0 && z<pool.length-3)continue;
+      var shuffled=topic.lines.slice().sort(function(){return Math.random()-.5;});
+      for(var k=0;k<shuffled.length;k++){
+        if(fanPost(p,shuffled[k],topic.tone,'시즌',topic.id)){total++;used[topic.id]=true;break;}
+      }
+    }
+    return total;
   }
   function recordContractFanPosts(p,narrative){
-    var transfer=/이적|트레이드|잔류|재계약/.test(narrative);
-    fanPost(p,transfer?pick([
-       '선수의 선택은 존중하지만 새로운 유니폼은 아직 낯설다.',
-       '구단과 선수 모두 생각이 있었겠지. 새 출발 응원한다.',
-       '계약이 드디어 정리됐네. 이제 경기에만 집중하자.'
-     ]):pick([
-       '연봉 계약이 끝났으니 이제 경기력으로 증명하면 된다.',
-       '이번 계약이 좋은 시즌의 시작이었으면 좋겠다.',
-       '그동안 뛰어온 걸 생각하면 납득할 만한 조건이다.'
-     ]),'mixed','계약');
-    fanPost(p,(p.salary||0)>40000?'고액 계약인 만큼 기대도 크다. 성적이 뒷받침되길.':'다음 시즌에도 팀에 힘이 되어줘!','neutral','계약');
+    var moved=/이적|트레이드/.test(narrative),stayed=/잔류|재계약/.test(narrative);
+    var high=(p.salary||0)>=35000,low=(p.salary||0)<5000;
+    var type=moved?'이적':stayed?'재계약':'연봉';
+    var words=moved?[
+      '새 유니폼을 입는다는 게 아직 실감 안 난다. 새로운 팀에서도 잘하자.',
+      '이적이 쉽지는 않았겠지만 선수에게는 기회가 될 수 있지.',
+      '처음엔 낯설겠지만 이번 선택이 좋은 전환점이 되길.',
+      '전 소속팀 팬도, 새 소속팀 팬도 각자 마음이 복잡할 것 같다.']:
+      stayed?[
+        '결국 남는구나. 익숙한 유니폼이 잘 어울려서 반갑다.',
+        '구단과 선수가 뜻을 모은 것 같아. 이젠 경기력으로 보자.',
+        '프랜차이즈 선수가 되는 길은 꾸준함부터 시작이지.']:
+      ['계약이 마무리됐네. 다음 시즌이 벌써 기대된다.',
+       '협상 이야기를 보니 야구도 결국 선택의 연속인 것 같다.',
+       '연봉은 결과에 따라 움직이는 거니까 다음 시즌 성적이 중요하겠지.'];
+    words=words.concat(high?[
+      '연봉 '+fmtMoney(p.salary)+'이면 기대도 크지. 부담을 이겨내면 좋겠어.',
+      '고액 계약인 만큼 주목을 많이 받을 거야. 경기에서 보여주길.']:
+      low?['아직 연봉이 '+fmtMoney(p.salary)+' 정도지만 성장할 시간은 충분하지.',
+            '낮은 연봉에서 시작해 큰 선수가 되는 사례도 많잖아.']:
+      ['이번 연봉 '+fmtMoney(p.salary)+' 정도면 구단도 나름 고민했겠네.',
+       '계약 조건이 다음 시즌 부담이 아니라 동기가 됐으면 좋겠다.']);
+    var recent=(p.fanFeed||[]).slice(-35).map(function(x){return x.text;});
+    var selected=words.filter(function(x){return recent.indexOf(x)<0;}).sort(function(){return Math.random()-.5;});
+    var n=0;
+    for(var i=0;i<selected.length&&n<2;i++)if(fanPost(p,selected[i],i===0?'mixed':'positive','계약',type))n++;
+    return n;
   }
   function renderFanPosts(p,count,kind){
     var posts=(p.fanFeed||[]).filter(function(item){return !kind||item.kind===kind;}).slice(-count).reverse();
     if(!posts.length)return '<p class="lede">시즌을 마치거나 계약을 체결하면 실제 선택과 성적을 반영한 댓글이 쌓입니다.</p>';
     return '<div class="community-list">'+posts.map(function(post){
+      var tone=FAN_TONES.indexOf(post.tone)>=0?post.tone:'mixed';
+      var toneText=tone==='positive'?'응원':tone==='critical'?'우려':'의견';
       return '<article class="community-post"><div><b>'+esc(post.by)+'</b><span>'+post.year+'년차 · '+esc(post.kind)+'</span></div>'+
-      '<p>'+esc(post.text)+'</p><small>공감 '+post.likes+'</small></article>';
+        '<p>'+esc(post.text)+'</p><div class="fan-meta"><span class="fan-tone '+tone+'">'+toneText+'</span><small>공감 '+(post.likes||0)+'</small></div></article>';
     }).join('')+'</div>';
   }
 
