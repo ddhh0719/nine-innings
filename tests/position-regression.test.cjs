@@ -6,7 +6,7 @@ const found=html.match(/<script>([\s\S]*?)<\/script>/);
 assert.ok(found,'game script exists');
 const js=found[1],end=js.indexOf("  document.addEventListener('click', function(e){");
 assert.ok(end>0);
-const output=js.slice(0,end)+"\n globalThis.__gameTests={BATTER_SUBROLES,PITCHER_SUBROLES,currentPlayRole,buildPositionPlayEvent,buildClutchMomentEvent,isPositionEventEligible,simulateBatterSeason,simulatePitcherSeason,recomputeBatterDerived,recomputePitcherDerived,simulatePostseasonBracket,TEAMS};\n})();";
+const output=js.slice(0,end)+"\n globalThis.__gameTests={BATTER_SUBROLES,PITCHER_SUBROLES,currentPlayRole,buildPositionPlayEvent,buildClutchMomentEvent,isPositionEventEligible,simulateBatterSeason,simulatePitcherSeason,recomputeBatterDerived,recomputePitcherDerived,simulatePostseasonBracket,TEAMS,LIFE_SHOP,purchaseLifeItem,recordSeasonFanPosts,renderFanPosts,POSITION_PLAY_VARIATIONS,CAREER_GOALS};\n})();";
 const sandbox={console,Math:Object.create(Math),document:{addEventListener(){}}};
 sandbox.Math.random=Math.random;sandbox.globalThis=sandbox;
 vm.createContext(sandbox);
@@ -95,4 +95,53 @@ test('250 postseason ladders obey series lengths and wild-card advantage',()=>{
    assert.equal(round.games.length,round.winsA+round.winsB-(round.fourthSeedAdvantage?1:0));
   }
  }
+});
+
+test('Three role-correct scenarios for each of the 12 positions',()=>{
+ for(const role of roles){
+  const situations=new Set();
+  for(let i=0;i<90;i++){
+   const p=mk(role),ev=g.buildPositionPlayEvent(p);
+   const prompt=ev.prompt(p);
+   situations.add(prompt.split(' · ').slice(-1)[0]);
+   assert.ok(prompt.includes(role));
+   assert.equal(ev.choices.length,3);
+  }
+  assert.ok(situations.size>=3,role+' should have multiple scenes');
+ }
+});
+test('Lifestyle shop deducts money and excludes incorrect positions',()=>{
+ const p=mk('유격수');
+ p.wallet=10000;p.totalEarnings=10000;p.ownedEquipment=[];p.lifeActionsYear={};p.lifeLedger=[];p.fanFeed=[];
+ const before=p.stats.defense;
+ assert.equal(g.purchaseLifeItem(p,'glove'),true);
+ assert.equal(p.wallet,8400);
+ assert.equal(p.stats.defense,before+2);
+ assert.equal(p.totalEarnings,10000);
+ assert.equal(g.purchaseLifeItem(p,'glove'),false);
+ assert.equal(g.purchaseLifeItem(p,'pitchlab'),false);
+ assert.equal(g.purchaseLifeItem(p,'fanmeet'),true);
+ assert.equal(g.purchaseLifeItem(p,'fanmeet'),false);
+ p.careerYears++;
+ assert.equal(g.purchaseLifeItem(p,'fanmeet'),true);
+ const t=mk('선발');t.wallet=10000;t.totalEarnings=10000;t.lifeLedger=[];t.ownedEquipment=[];t.lifeActionsYear={};
+ assert.equal(g.purchaseLifeItem(t,'bat'),false);
+ assert.equal(g.purchaseLifeItem(t,'pitchshoes'),true);
+ assert.equal(t.stats.stamina,71);
+ assert.ok(g.LIFE_SHOP.length>=15);
+});
+test('Community posts persist when a result screen is rerendered',()=>{
+ const p=mk('유격수');
+ p.wallet=2000;p.totalEarnings=2000;p.fanFeed=[];p.lifeLedger=[];p.ownedEquipment=[];p.lifeActionsYear={};
+ g.recordSeasonFanPosts(p,{ops:.912,hr:27,errors:3,avg:.295},['골든글러브']);
+ const feed=g.renderFanPosts(p,8);
+ assert.ok(feed.includes('community-post'));
+ assert.ok(p.fanFeed.length>=3);
+ assert.equal(g.renderFanPosts(p,8),feed);
+});
+test('Overseas transfers are disabled and pacing has distinct targets',()=>{
+ assert.doesNotMatch(html,/data-choice="overseas"/);
+ assert.doesNotMatch(html,/id:'overseas_showcase'|id:'overseas_scouting_offer'/);
+ assert.ok(!g.CAREER_GOALS.some(x=>x.id==='overseas_bound'));
+ assert.match(js,/quick\?randInt\(1,2\):randInt\(4,5\)/);
 });
