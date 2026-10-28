@@ -5614,7 +5614,8 @@
 
   // Lifestyle economy: same unit as salary, 10,000 KRW.
   var LIFE_SHOP=[
-    {id:'cleats',label:'맞춤 경기화',price:700,type:'gear',stat:'speed',gain:1,desc:'주력 +1'},
+    {id:'cleats',label:'맞춤 경기화',price:700,type:'gear',position:'batter',stat:'speed',gain:1,desc:'주력 +1'},
+    {id:'pitchshoes',label:'투수용 안정화',price:950,type:'gear',position:'pitcher',stat:'stamina',gain:1,desc:'체력 +1'},
     {id:'glove',label:'프로 수비 글러브',price:1600,type:'gear',position:'batter',stat:'defense',gain:2,desc:'수비 +2'},
     {id:'bat',label:'프리미엄 배트 세트',price:2400,type:'gear',position:'batter',stat:'power',gain:2,fan:-2,desc:'파워 +2, 사치 논란으로 여론 소폭 하락'},
     {id:'cage',label:'개인 타격 분석 장비',price:5600,type:'gear',position:'batter',stat:'contact',gain:3,desc:'정교함 +3'},
@@ -7199,7 +7200,11 @@
       prepend.push(p.quickMomentRotation%2?buildClutchMomentEvent(p):buildPositionPlayEvent(p));
     }
     var manualSlots=Math.max(0,target-prepend.length);
-    if(manual.length>manualSlots){ auto=auto.concat(manual.splice(manualSlots)); }
+    if(manual.length>manualSlots){
+      var overflow=manual.splice(manualSlots);
+      // Never silently accept a transfer or a major career decision.
+      auto=auto.concat(overflow.filter(function(ev){return !ALWAYS_MANUAL_EVENT_IDS[ev.id];}));
+    }
     var events=prepend.concat(manual);
     var tier=p.pendingChallengeTier||'normal';
     var challengeGoal=computeSeasonChallengeGoals(p)[tier];
@@ -8185,7 +8190,7 @@
     var html = renderSeasonStepIndicator('contract')+
       '<div class="eyebrow">'+p.careerYears+'년차 연봉 협상</div><h2>연봉 협상</h2>'+
       '<p class="lede">이번 시즌 성적을 바탕으로 구단이 제시한 금액은 <b style="color:var(--ink);">'+fmtMoney(sf.teamOffer)+'</b>입니다. (현재 연봉 '+fmtMoney(p.salary)+')</p>'+
-      '<p class="lede" style="font-size:12px;">현재 팬 여론: <b>'+fanApprovalLabel(p.fanApproval)+'</b> · '+(p.team?p.team.name:'현 소속팀')+' — '+teamTenureLabel(p)+' — 인기와 연차가 협상에 유리하게 작용합니다.</p>'+
+      '<p class="lede" style="font-size:12px;">'+(p.team?p.team.name:'현 소속팀')+' — '+teamTenureLabel(p)+' · 협상 결과에 따라 팬 반응도 달라집니다.</p>'+renderFanPosts(p,2,'시즌')+
       '<div class="btn-row" style="flex-direction:column;align-items:stretch;">'+
         '<button class="btn btn-outline" style="text-align:left;" data-action="negotiate" data-stance="accept">제안을 수락한다 — 안전하게 '+fmtMoney(sf.teamOffer)+' '+salaryChangeLabel(p.salary, sf.teamOffer)+'</button>'+
         '<button class="btn btn-outline" style="text-align:left;" data-action="negotiate" data-stance="moderate">적당히 인상을 요구한다 — 약 '+fmtMoney(capSalaryOffer(p, sf.teamOffer*1.15))+' '+salaryChangeLabel(p.salary, capSalaryOffer(p, sf.teamOffer*1.15))+'</button>'+
