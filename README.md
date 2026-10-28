@@ -30,11 +30,16 @@ Settings → Pages → Deploy from a branch → feature/realistic-season-v1 / (r
 
 ## 이미지 적용
 
-저장소에 기본 SVG 그림이 포함되어 있어 별도 이미지 없이도 실행 가능합니다.
-별도 제공한 nine-innings-artwork.zip을 풀어 assets/images 폴더의 9개 WebP 파일을 같은 경로에 업로드하면 새 일러스트가 자동 표시됩니다.
-이미지가 없으면 자동으로 SVG 버전을 표시합니다.
-stadium.webp는 상시 배경이며, draft.webp/debut.webp/injury.webp/contract.webp/champion.webp는 큰 장면에서만 나타납니다.
-training.webp/batting.webp/pitching.webp는 추가 연출을 위한 리소스입니다.
+기존 기본 SVG 일러스트는 삭제했습니다. 이제 assets/images/ 아래에서 원하는 그림을 직접 관리합니다.
+- assets/images/backgrounds/stadium.webp : 상시 배경
+- assets/images/events/draft.webp, debut.webp, injury.webp, contract.webp, champion.webp : 해당 주요 이벤트 발생 시 표시
+- assets/images/players/ : 향후 선수 프로필 이미지용 (현재 자동 연결되지 않음)
+- assets/images/teams/ : 향후 구단 로고 이미지용 (현재 자동 연결되지 않음)
+- events/training.webp, batting.webp, pitching.webp 등 그 외 이미지도 저장 가능하지만 아직 해당 화면에는 자동 연결되지 않습니다.
+
+아직 올리지 않은 이미지 경로는 건너뛰며, 깨진 기본 일러스트나 대체 이미지를 표시하지 않습니다.
+업로드 방법과 정확한 이름은 assets/images/README.md를 참조하세요.
+이전에 받은 이미지 ZIP의 파일을 사용할 경우 stadium.webp는 backgrounds/ 안에, 이벤트 이미지는 events/ 안에 올려야 합니다.
 
 ## 중요한 미완료 범위
 
