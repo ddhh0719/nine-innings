@@ -1,3 +1,6 @@
+<!doctype html>
+<html lang="ko">
+<head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>나인 이닝즈</title>
@@ -368,6 +371,8 @@
   }
 </style>
 
+</head>
+<body>
 <div id="app">
   <header id="scoreboard-bar">
     <div class="sb-inner">
@@ -1218,7 +1223,7 @@
       // swings much wider (seasonVarianceScale), so without a floor it could out-qualify a full,
       // healthy season purely from small-sample variance.
       if(line.ab>=350 && rollAward(line.ops, 1.100, 0.06, true)) awards.push('정규시즌 MVP');
-      else if(line.ab>=350 && rollAward(line.ops, 0.990, 0.05, true)) awards.push('골든글러브');
+      if(line.ab>=350 && rollAward(line.ops, 0.990, 0.05, true)) awards.push('골든글러브');
       if(isRookieYear && rollAward(scB, 151, 18, true)) awards.push('신인왕');
     } else {
       var scP=seasonScorePitcher(line);
@@ -1227,7 +1232,7 @@
       // so one shared floor would make MVP/GG mathematically impossible for any reliever.
       var mvpIpFloor = (player.subrole==='불펜' || player.subrole==='마무리') ? 45 : 110;
       if(line.ip>=mvpIpFloor && rollAward(scP, 95, 16, true)) awards.push('정규시즌 MVP');
-      else if(line.ip>=mvpIpFloor && rollAward(scP, 75, 14, true)) awards.push('골든글러브');
+      if(line.ip>=mvpIpFloor && rollAward(scP, 75, 14, true)) awards.push('골든글러브');
       if(isRookieYear && rollAward(scP, 70, 12, true)) awards.push('신인왕');
     }
     return awards;
@@ -2513,38 +2518,44 @@
   function pairGameWinProb(strengthA, strengthB){
     return clamp(0.5 + (strengthA-strengthB)*0.11, 0.16, 0.84);
   }
-  // A postseason series between two seeds — seed gap matters but never makes the lower seed a
-  // lock to lose, so #2-#5 genuinely can win it all, not just #1.
+  // Per-game probability, deliberately narrower than the old one-roll series formula.
+  // Actual series results now emerge from 1-7 independently played games.
   function seriesWinProb(pctA, pctB){
-    return clamp(0.5 + (pctA-pctB)*1.4, 0.30, 0.75);
+    return clamp(0.5 + (pctA-pctB)*1.0, 0.38, 0.62);
   }
-  // KBO-style top-5 ladder: 와일드카드(4위 vs 5위) → 준플레이오프(3위 vs 승자) →
-  // 플레이오프(2위 vs 승자) → 한국시리즈(1위 vs 승자). rows must already be sorted by rank.
-  // Item 30: returns round-by-round detail (not just the bare champion name) so the player can see
-  // exactly how their own team's postseason run played out. playerTeamName/strategyBias are
-  // optional trailing params — omitted (as every pre-Item-30 call site/test does), strategyBias
-  // defaults to 0 and every series resolves off the untouched seed pct, so the win/loss outcome
-  // distribution is bit-for-bit identical to the pre-Item-30 formula; only the RETURN SHAPE changed
-  // (a string before -> {champion, rounds} now), which is why the one caller and the one test that
-  // read the return value both had to be updated alongside this function.
+  // Top-five postseason ladder. Each round is played game-by-game rather than
+  // resolved by a single coin flip. Wild card: the fourth seed begins with one
+  // virtual win, so the fifth seed must win both games to advance.
   function simulatePostseasonBracket(rows, playerTeamName, strategyBias){
-    var seeds=rows.slice(0,5);
-    var rounds=[];
+    if(!rows || rows.length<5) return {champion:null, rounds:[]};
+    var seeds=rows.slice(0,5), rounds=[];
     function playSeries(round, a, b){
-      var pA=a.pct, pB=b.pct;
+      var adjustedA=a.pct, adjustedB=b.pct;
       if(strategyBias && playerTeamName){
-        if(a.team===playerTeamName) pA+=strategyBias;
-        else if(b.team===playerTeamName) pB+=strategyBias;
+        if(a.team===playerTeamName) adjustedA+=strategyBias;
+        if(b.team===playerTeamName) adjustedB+=strategyBias;
       }
-      var winner = Math.random()<seriesWinProb(pA,pB) ? a : b;
-      rounds.push({round:round, teamA:a.team, teamB:b.team, winner:winner.team});
+      var pA=seriesWinProb(adjustedA, adjustedB);
+      var isWildcard=round==='wildcard';
+      var winsNeeded=isWildcard?2:(round==='koreanseries'?4:3);
+      var winsA=isWildcard?1:0, winsB=0;
+      var games=[];
+      while(winsA<winsNeeded && winsB<winsNeeded){
+        var aWon=Math.random()<pA;
+        if(aWon) winsA++; else winsB++;
+        games.push({number:games.length+1, winner:aWon?a.team:b.team});
+      }
+      var winner=winsA===winsNeeded?a:b;
+      rounds.push({round:round, teamA:a.team, teamB:b.team,
+        winner:winner.team, winsA:winsA, winsB:winsB,
+        fourthSeedAdvantage:isWildcard, games:games});
       return winner;
     }
     var wc=playSeries('wildcard', seeds[3], seeds[4]);
     var semi=playSeries('semifinal', seeds[2], wc);
     var po=playSeries('playoff', seeds[1], semi);
     var champion=playSeries('koreanseries', seeds[0], po);
-    return { champion:champion.team, rounds:rounds };
+    return {champion:champion.team, rounds:rounds};
   }
   function simulateLeagueStandings(player, perf){
     ensureTeamStrength();
@@ -6015,15 +6026,18 @@
     used[name]=true;
     return name;
   }
-  var REGULATION_AB = 350;   // KBO-style 규정타석 floor used for rate-stat titles (avg/obp)
-  var REGULATION_H_AB = 300; // 최다안타왕's own slightly looser AB floor (unchanged from before)
-  var REGULATION_IP = 144;   // KBO-style 규정이닝 floor for 평균자책점왕
+  var REGULATION_PA = Math.ceil(144*3.1); // 144-game league: 447 qualifying plate appearances
+  var REGULATION_IP = 144;  // 1 IP per team game for ERA title
+  // The present engine tracks AB and BB but not HBP, sacrifice flies or bunts.
+  // AB + BB is an intentionally conservative PA estimate until full event-level
+  // plate-appearance accounting is introduced.
+  function estimatedPlateAppearances(row){ return (row.ab||0)+(row.bb||0); }
   var BATTER_LEADERBOARD_CATS=[
-    { key:'avg', award:'타격왕', label:'타율', higherBetter:true, format:function(v){ return formatAvg(v); }, qualify:function(r){ return r.ab>=REGULATION_AB; } },
+    { key:'avg', award:'타격왕', label:'타율', higherBetter:true, format:function(v){ return formatAvg(v); }, qualify:function(r){ return estimatedPlateAppearances(r)>=REGULATION_PA; } },
     { key:'hr', award:'홈런왕', label:'홈런', higherBetter:true, format:function(v){ return String(v); } },
     { key:'rbi', award:'타점왕', label:'타점', higherBetter:true, format:function(v){ return String(v); } },
-    { key:'h', award:'최다안타왕', label:'안타', higherBetter:true, format:function(v){ return String(v); }, qualify:function(r){ return r.ab>=REGULATION_H_AB; } },
-    { key:'obp', award:'출루율왕', label:'출루율', higherBetter:true, format:function(v){ return v.toFixed(3); }, qualify:function(r){ return (r.ab+(r.bb||0))>=REGULATION_AB; } },
+    { key:'h', award:'최다안타왕', label:'안타', higherBetter:true, format:function(v){ return String(v); } },
+    { key:'obp', award:'출루율왕', label:'출루율', higherBetter:true, format:function(v){ return v.toFixed(3); }, qualify:function(r){ return estimatedPlateAppearances(r)>=REGULATION_PA; } },
     { key:'runs', award:'득점왕', label:'득점', higherBetter:true, format:function(v){ return String(v); } },
     { key:'sb', award:'도루왕', label:'도루', higherBetter:true, format:function(v){ return String(v); } },
     { key:'ops', award:null, label:'OPS', higherBetter:true, format:function(v){ return v.toFixed(3); } }
@@ -6046,10 +6060,10 @@
     var avg=clamp(rand(0.220,0.345),0.150,0.400);
     var h=Math.round(ab*avg);
     var slg=clamp(rand(0.350,0.620),0.300,0.750);
-    var obp=clamp((h+bb)/(ab+bb+8), 0.250,0.470);
+    var obp=clamp((h+bb)/(ab+bb), 0,1);
     return {
-      ab:ab, bb:bb, avg:avg, h:h,
-      hr:Math.round(rand(4,42)), rbi:Math.round(rand(28,120)), runs:Math.round(rand(30,100)),
+      ab:ab, bb:bb, avg:h/ab, h:h,
+      hr:Math.min(h,Math.round(rand(4,42))), rbi:Math.round(rand(28,120)), runs:Math.round(rand(30,100)),
       sb:Math.round(rand(0,45)), obp:obp, ops:obp+slg
     };
   }
@@ -6574,6 +6588,57 @@
   // listed (이적요청/대표팀/포지션전환/에이전트교체/장기계약/해외진출) — these must never be
   // silently auto-resolved by 간편 진행, unlike routine flavor events (coach_change, milestone
   // chases, allstar selection, etc.) which are fine to fold into the auto-summary line.
+  // A playable, skill-dependent baseball moment without replacing the existing
+  // season engine. The selected strategy gives a small, coherent box-score delta.
+  function buildClutchMomentEvent(p){
+    var isBatter=p.position==='batter';
+    var inning=isBatter?randInt(7,9):(p.subrole==='마무리'?9:(p.subrole==='선발'?6:8));
+    var situation=isBatter?pick(['2사 2루','1사 1, 3루','2사 만루']):pick(['1사 2, 3루','2사 만루','무사 1, 2루']);
+    function bump(ctx, key, amount){
+      ctx.lineBoost[key]=(ctx.lineBoost[key]||0)+amount;
+    }
+    if(isBatter){
+      return {id:'clutch_game_moment', category:'승부처',
+        prompt:function(pl){return inning+'회 '+situation+', '+pl.name+'의 타석이 돌아왔습니다. 어떤 타격 전략을 선택하겠습니까?';},
+        choices:[
+          {label:'컨택에 집중해 주자를 불러들인다',resolve:function(pl,ctx){
+            var chance=clamp(0.20+(pl.stats.contact/99)*0.34+(pl.stats.mental/99)*0.08,0.18,0.66);
+            if(Math.random()<chance){bump(ctx,'h',1);bump(ctx,'rbi',1);adjustFan(pl,2);return '정교한 타격으로 적시타를 만들었습니다! 시즌 안타와 타점이 각각 1개 증가합니다.';}
+            return '좋은 타구였지만 수비 정면으로 향했습니다. 추가 기록은 없습니다.';
+          }},
+          {label:'큰 스윙으로 역전 홈런을 노린다',resolve:function(pl,ctx){
+            var chance=clamp(0.025+Math.pow(pl.stats.power/99,2)*0.15+(pl.stats.contact/99)*0.025,0.02,0.20);
+            if(Math.random()<chance){bump(ctx,'h',1);bump(ctx,'hr',1);bump(ctx,'rbi',2);adjustFan(pl,5);return '승부를 뒤집는 장타가 담장을 넘었습니다! 홈런, 안타, 타점 기록에 반영됩니다.';}
+            bump(ctx,'k',1);return '큰 스윙이 빗나가 삼진으로 물러났습니다. 시즌 삼진이 1개 늘어납니다.';
+          }},
+          {label:'공을 끝까지 보고 출루를 노린다',resolve:function(pl,ctx){
+            var chance=clamp(0.06+(pl.stats.mental/99)*0.19,0.05,0.28);
+            if(Math.random()<chance){bump(ctx,'bb',1);return '끈질긴 승부 끝에 볼넷을 골랐습니다. 시즌 볼넷 1개가 추가됩니다.';}
+            return '상대 투수가 스트라이크존을 공략해 범타로 마무리됐습니다.';
+          }}
+        ]};
+    }
+    return {id:'clutch_game_moment',category:'승부처',
+      prompt:function(pl){return inning+'회 '+situation+', '+pl.name+'이(가) 위기에 등판해 타자를 상대합니다. 어떤 투구를 선택하겠습니까?';},
+      choices:[
+        {label:'결정구로 삼진을 노린다',resolve:function(pl,ctx){
+          var chance=clamp(0.18+(pl.stats.velocity/99)*0.21+(pl.stats.breaking/99)*0.21,0.16,0.66);
+          if(Math.random()<chance){bump(ctx,'k',1);adjustFan(pl,2);return '결정구가 통했습니다! 탈삼진 1개가 추가됩니다.';}
+          bump(ctx,'bb',1);return '승부구가 존을 벗어나 볼넷을 허용했습니다. 볼넷이 1개 늘어납니다.';
+        }},
+        {label:'낮은 코스로 맞혀 잡는다',resolve:function(pl,ctx){
+          var chance=clamp(0.26+(pl.stats.control/99)*0.35,0.24,0.66);
+          if(Math.random()<chance){bump(ctx,'er',-1);return '땅볼을 유도해 실점 위기를 줄였습니다. 시즌 자책점이 1점 줄어듭니다.';}
+          bump(ctx,'h',1);return '타구가 수비 사이를 빠져나갔습니다. 시즌 피안타가 1개 늘어납니다.';
+        }},
+        {label:'제구를 우선하며 유리한 카운트를 만든다',resolve:function(pl,ctx){
+          var chance=clamp(0.24+(pl.stats.control/99)*0.38+(pl.stats.mental/99)*0.06,0.22,0.73);
+          if(Math.random()<chance){bump(ctx,'bb',-1);return '코너워크가 통했습니다. 시즌 볼넷이 1개 감소합니다.';}
+          return '타자가 끈질기게 버텼지만 추가적인 기록 변화 없이 마무리했습니다.';
+        }}
+      ]};
+  }
+
   var ALWAYS_MANUAL_EVENT_IDS = {
     trade_rumor:1, trade_deadline_rumor:1, trade_risk_gate:1,
     national_team_call:1, wbc_call_up:1,
@@ -6581,7 +6646,7 @@
     agent_change_longterm_deal:1, agent_strategy:1,
     overseas_scouting_offer:1,
     contract_year_pressure:1, front_office_meeting:1,
-    injury_rehab_choice:1
+    injury_rehab_choice:1, clutch_game_moment:1
   };
   var MAX_SEASON_MANUAL_EVENTS=4;
   function beginSeasonEvents(){
@@ -6603,7 +6668,9 @@
     if(growthPathEvent) prepend.push(growthPathEvent);
     var tournamentEvent=buildMilitaryTournamentEvent(p);
     if(tournamentEvent) prepend.push(tournamentEvent);
-    var manualSlots=Math.max(1, MAX_SEASON_MANUAL_EVENTS - prepend.length);
+    // Keep mandatory medical/military decisions ahead of the baseball moment.
+    if(prepend.length<MAX_SEASON_MANUAL_EVENTS) prepend.push(buildClutchMomentEvent(p));
+    var manualSlots=Math.max(0, MAX_SEASON_MANUAL_EVENTS - prepend.length);
     if(manual.length>manualSlots){ auto=auto.concat(manual.splice(manualSlots)); }
     var events=prepend.concat(manual);
     var tier=p.pendingChallengeTier||'normal';
@@ -7071,7 +7138,10 @@
           if(rd.teamA!==teamName && rd.teamB!==teamName) return;
           var opp = rd.teamA===teamName ? rd.teamB : rd.teamA;
           var won = rd.winner===teamName;
-          hi.push((POSTSEASON_ROUND_LABEL[rd.round]||rd.round)+' — '+opp+'을(를) 상대로 '+(won?'승리했습니다.':'패배하며 이번 포스트시즌 여정을 마쳤습니다.'));
+          var mySeriesWins=rd.teamA===teamName?rd.winsA:rd.winsB;
+          var oppSeriesWins=rd.teamA===teamName?rd.winsB:rd.winsA;
+          var advantageText=rd.fourthSeedAdvantage?' (4위 팀 1승 어드밴티지 포함)':'';
+          hi.push((POSTSEASON_ROUND_LABEL[rd.round]||rd.round)+' — '+opp+' 상대 '+mySeriesWins+'승 '+oppSeriesWins+'패'+advantageText+', '+(won?'시리즈 승리.':'시리즈 패배로 탈락.'));
         });
       }
     }
@@ -8024,3 +8094,5 @@
   render();
 })();
 </script>
+</body>
+</html>
