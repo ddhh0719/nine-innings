@@ -5869,7 +5869,10 @@
     pool.push({id:id,tone:tone,lines:lines});
   }
   function recordSeasonFanPosts(p,line,awards){
-    var batter=p.position==='batter', prev=p.history&&p.history.length?p.history[p.history.length-1]:null;
+    var batter=p.position==='batter', prev=p.history&&p.history.length?
+      p.history[p.history.length-1]:null;
+    // At the end-of-season call, the current season has already been saved.
+    if(prev && prev.year===p.careerYears){prev=p.history.length>1?p.history[p.history.length-2]:null;}
     var old=prev&&prev.line;
     var pool=[],year=p.careerYears,club=p.team&&p.team.name||'구단';
     var qualifies=batter?(line.ab||0)>=300:(line.ip||0)>=45;
@@ -7854,8 +7857,6 @@
     // a save/reload never re-rolls it).
     var leagueBoards = generateSeasonLeagueRecords(p, line);
     var awards = recordKingAwardsFromBoards(leagueBoards).concat(determineAwards(p, line, isRookie));
-    recordSeasonFanPosts(p,line,awards);
-
     p.history.push({year:p.careerYears, age:p.age, teamName:p.team?p.team.name:'무소속', line:line, leagueBoards:leagueBoards});
     p.careerScore=(p.careerScore||0)+awardScore;
     p.majorSeasons=(p.majorSeasons||0)+1;
@@ -7894,6 +7895,8 @@
       p.leagueStandingsHistory.push({year:p.careerYears, rows:standings.rows});
       if(p.leagueStandingsHistory.length>30) p.leagueStandingsHistory.shift(); // cap save size on very long careers
     }
+    // Generate commentary after this season's final team ranking is available.
+    recordSeasonFanPosts(p,line,awards);
     // Rival (Phase 15) — never simulated play-by-play, just a loosely-linked season score.
     advanceRival(p, awardScore);
 
