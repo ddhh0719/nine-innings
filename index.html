@@ -1417,10 +1417,9 @@
     if(player.managerFit===undefined) player.managerFit=null;
     if(player.rosterCompetitionWon===undefined) player.rosterCompetitionWon=null;
     if(player.positionFlexible===undefined) player.positionFlexible=false;
-    if(player.overseasInterest===undefined) player.overseasInterest=null;
     if(player.mentorBond===undefined) player.mentorBond=0;
     if(player.agentAggressive===undefined) player.agentAggressive=false;
-    if(player.careerGoal===undefined) player.careerGoal=CAREER_GOALS[0].id;
+    if(player.careerGoal===undefined || player.careerGoal==='overseas_bound') player.careerGoal=CAREER_GOALS[0].id;
     if(player.simMode===undefined) player.simMode=SIM_MODES[0].id;
     if(!Array.isArray(player.ovrHistory)) player.ovrHistory=[];
     if(!Array.isArray(player.leagueStandingsHistory)) player.leagueStandingsHistory=[];
@@ -1450,7 +1449,6 @@
     // overseas_bound 목표의 실제 달성 플래그, goalMilestoneHit은 목표 달성 보상 중복 지급 방지용. 구
     // 세이브는 모두 "아직 달성/발생하지 않음" 상태로 시작 — 과거 시즌을 소급 계산하지 않는다.
     if(player.injuryCount===undefined) player.injuryCount=0;
-    if(player.overseasMoveAchieved===undefined) player.overseasMoveAchieved=false;
     if(player.goalMilestoneHit===undefined) player.goalMilestoneHit=false;
     // Item 23 (FA 자격 현실화, 2026-09): a save from before this existed had yearsToFA counting
     // down from the OLD flat 3-season cycle. We never retroactively rewrite yearsToFA itself (that
@@ -2290,7 +2288,6 @@
     { id:'champion_hunter', label:'우승 청부사', desc:'결정적인 순간마다 힘을 보태 우승에 기여한다' },
     { id:'record_chaser', label:'개인 기록 도전자', desc:'리그를 대표하는 개인 기록에 도전한다' },
     { id:'national_team_star', label:'국가대표 스타', desc:'대표팀의 핵심 선수로 국제무대에서 활약한다' },
-    { id:'overseas_bound', label:'해외 진출', desc:'해외 리그 진출을 목표로 커리어를 쌓는다' },
     { id:'iron_man', label:'장수 선수', desc:'부상 없이 오래도록 그라운드를 지킨다' }
   ];
   // 커리어 목표 실기능화 (2026-09): 선택한 목표가 실제로 (1) 진행률로 추적되고, (2) 특정 카테고리/
@@ -2302,7 +2299,6 @@
     champion_hunter:{ categories:['team'], tags:['postseason','clutch'] },
     record_chaser:{ categories:['performance'] },
     national_team_star:{ categories:['national_team'] },
-    overseas_bound:{ tags:['overseas'] },
     iron_man:{ categories:['health'] }
   };
   function eventMatchesGoalAffinity(e, player){
@@ -2360,10 +2356,6 @@
       pct = clamp(callups*20 + (player.militaryExempt?20:0), 0, 100);
       statusText = callups>0 ? ('국가대표 발탁 '+callups+'회'+(player.militaryExempt?' · 국제대회 메달 획득':'')) : '아직 국가대표 발탁 경험이 없습니다.';
       achieved = callups>=2;
-    } else if(goal==='overseas_bound'){
-      pct = player.overseasMoveAchieved ? 100 : (player.overseasInterest ? 55 : 15);
-      statusText = player.overseasMoveAchieved ? '해외 리그 진출에 성공했습니다.' : (player.overseasInterest ? '해외 구단의 관심을 받고 있습니다.' : '아직 해외 진출 기회를 잡지 못했습니다.');
-      achieved = !!player.overseasMoveAchieved;
     } else if(goal==='iron_man'){
       var healthyRatio = years>0 ? Math.max(0, 1-((player.injuryCount||0)/years)) : 1;
       pct = clamp(Math.round(healthyRatio*60 + Math.min(years,15)/15*40), 0, 100);
@@ -4406,24 +4398,6 @@
       ]
     },
     {
-      id:'overseas_showcase', category:'contract',
-      condition:function(p){ return overall(p)>=65; },
-      prompt:function(p){ return '해외 스카우트들이 경기장을 찾아 플레이를 지켜보고 있다는 소식이 전해졌습니다.'; },
-      choices:[
-        { label:'해외 진출을 염두에 두고 적극 어필한다', resolve:function(p, ctx){
-            adjustFan(p, 8);
-            ctx.injuryRiskDelta += 0.05;
-            ctx.statBoost.mental=(ctx.statBoost.mental||0)-2;
-            return '스카우트 앞에서 어필하려는 의욕이 앞서며 부담도 함께 커졌지만, 이름값은 확실히 높아졌습니다.';
-          }},
-        { label:'평소처럼 국내 커리어에 집중한다', resolve:function(p, ctx){
-            adjustFan(p, 2);
-            applyPermanentStatDelta(p,'mental',1,0.15);
-            return '외부 시선에 흔들리지 않고 평소 페이스를 유지했습니다.';
-          }}
-      ]
-    },
-    {
       id:'incentive_clause_chase', category:'contract',
       condition:function(p){ return p.careerYears>=2; },
       prompt:function(p){ return '에이전트가 이번 시즌 목표 성적을 달성하면 인센티브를 받는 조항을 제안합니다.'; },
@@ -5085,25 +5059,6 @@
       ]
     },
     {
-      id:'overseas_scouting_offer', category:'contract', importance:'major', cooldownYears:5,
-      tags:['overseas'], careerStage:['prime','veteran'],
-      condition:function(p){ return overall(p)>=70 && p.careerYears>=4; },
-      prompt:function(p){ return '해외 리그 구단에서 스카우트 제안이 들어왔습니다.'; },
-      choices:[
-        { label:'적극적으로 관심을 표한다', resolve:function(p, ctx){
-            p.overseasInterest=true;
-            adjustFan(p, -2);
-            ctx.statBoost.mental=(ctx.statBoost.mental||0)+randInt(1,3);
-            return '해외 진출 의지를 밝히며 다음 FA 시장에서 새로운 선택지가 열렸습니다.';
-          }},
-        { label:'국내 잔류 의사를 밝힌다', resolve:function(p, ctx){
-            p.overseasInterest=false;
-            adjustFan(p, 5);
-            return '국내 팬들에게 잔류 의사를 밝히며 큰 지지를 받았습니다.';
-          }}
-      ]
-    },
-    {
       id:'mentor_mentee_bond', category:'team', cooldownYears:2,
       tags:['mentorship'], careerStage:['any'],
       condition:function(p){ return p.careerYears>=3; },
@@ -5254,32 +5209,28 @@
   // that don't carry an explicit importance tag (the pre-existing 78-event pool) default to
   // "minor" — if no explicitly-tagged major is eligible this season, the first minor picked
   // simply anchors the season instead.
+  // Weighted career milestones + shuffled minor events give different seasons.
   function pickSeasonEvents(p){
     if(!p.eventHistory) p.eventHistory=[];
-    var eligible = EVENT_POOL.filter(function(e){
-      if(e.condition && !e.condition(p)) return false;
-      if(!isPositionEventEligible(e,p)) return false;
-      return !eventOnCooldown(e, p);
+    var eligible=EVENT_POOL.filter(function(e){
+      return (!e.condition || e.condition(p)) && isPositionEventEligible(e,p) && !eventOnCooldown(e,p);
     });
-    eligible = eligible.slice().sort(function(){ return Math.random()-0.5; });
-    var majors = eligible.filter(function(e){ return e.importance==='major'; });
-    var minors = eligible.filter(function(e){ return e.importance!=='major'; });
-
+    for(var i=eligible.length-1;i>0;i--){
+      var j=randInt(0,i),tmp=eligible[i];eligible[i]=eligible[j];eligible[j]=tmp;
+    }
+    var majors=eligible.filter(function(e){return e.importance==='major';});
+    var minors=eligible.filter(function(e){return e.importance!=='major';});
     var manual=[];
     if(majors.length){
-      // 커리어 목표 실기능화: 목표와 결이 맞는(카테고리/태그 일치) 메이저 이벤트는 이번 시즌의
-      // '수동 선택' 자리를 얻을 확률이 약 2.5배 높다 — 절대 고정 당첨은 아니라서(가중치일 뿐),
-      // 목표와 무관한 이벤트도 여전히 등장할 수 있다.
-      var majorWeights = majors.map(function(e){ return eventMatchesGoalAffinity(e, p) ? 2.5 : 1; });
-      var pickIdx = weightedPickIndex(majorWeights);
-      manual.push(majors.splice(pickIdx,1)[0]);
+      var weights=majors.map(function(e){return eventMatchesGoalAffinity(e,p)?2.5:1;});
+      manual.push(majors.splice(weightedPickIndex(weights),1)[0]);
     }
-    else if(minors.length) manual.push(minors.shift());
-    var minorCount=Math.min(randInt(1,2), minors.length);
-    for(var i=0;i<minorCount;i++) manual.push(minors.shift());
-
-    var auto = majors.concat(minors).slice(0, 2);
-    return { manual:manual, auto:auto };
+    while(manual.length<5 && (minors.length||majors.length)){
+      manual.push((minors.length?minors:majors).shift());
+    }
+    // Never automatically accept career-changing proposals.
+    var auto=minors.concat(majors).filter(function(e){return !ALWAYS_MANUAL_EVENT_IDS[e.id];}).slice(0,2);
+    return {manual:manual,auto:auto};
   }
 
   /* ---------------- state ---------------- */
@@ -5735,7 +5686,7 @@
         '<button type="button" class="chip'+(mode==='story'?' selected':'')+'" data-action="set-progression-mode" data-mode="story">스토리 진행</button>'+
         '<button type="button" class="chip'+(mode==='simple'?' selected':'')+'" data-action="set-progression-mode" data-mode="simple">간편 진행</button>'+
       '</div>'+
-      '<p class="lede" style="font-size:12px;">'+(mode==='simple' ? '이번 시즌의 주요 이벤트만 직접 선택하고, 나머지는 한 줄로 짧게 요약해서 보여드립니다.' : '이번 시즌의 모든 이벤트를 하나씩 직접 선택합니다.')+'</p>';
+      '<p class="lede" style="font-size:12px;">'+(mode==='simple' ? '핵심 선택 1~2개만 직접 진행합니다. 치료나 병역 같은 필수 결정은 추가될 수 있습니다.' : '한 시즌에 서로 다른 상황 4~5개를 직접 선택합니다.')+'</p>';
 
     $('#tab-home').innerHTML=html;
   }
@@ -6879,14 +6830,13 @@
     national_team_call:1, wbc_call_up:1,
     position_change_request:1,
     agent_change_longterm_deal:1, agent_strategy:1,
-    overseas_scouting_offer:1,
     contract_year_pressure:1, front_office_meeting:1,
     injury_rehab_choice:1, clutch_game_moment:1, position_play_moment:1
   };
   var MAX_SEASON_MANUAL_EVENTS=5;
   function beginSeasonEvents(){
     var p=state.player;
-    var picked=pickSeasonEvents(p); // { manual:[1 major + 1-2 minor], auto:[leftover eligible, auto-resolved] }
+    var picked=pickSeasonEvents(p); // different pacing per user mode
     var manual=picked.manual.slice();
     var auto=picked.auto.slice();
     // Rare gate events (military tournament, growth-path choice) are prepended ahead of the
@@ -6903,13 +6853,18 @@
     if(growthPathEvent) prepend.push(growthPathEvent);
     var tournamentEvent=buildMilitaryTournamentEvent(p);
     if(tournamentEvent) prepend.push(tournamentEvent);
-    // Keep mandatory medical/military decisions ahead of the baseball moment.
-    if(prepend.length<MAX_SEASON_MANUAL_EVENTS) prepend.push(buildClutchMomentEvent(p));
-    if(prepend.length<MAX_SEASON_MANUAL_EVENTS){
-      var roleMoment=buildPositionPlayEvent(p);
-      if(roleMoment) prepend.push(roleMoment);
+    // Story 4-5 choices; quick 1-2. Compulsory medical/military gates
+    // are never silently auto-resolved, even on a rare crowded season.
+    var quick=(p.progressionMode||'story')==='simple';
+    var target=quick?randInt(1,2):randInt(4,5);
+    if(!quick){
+      if(prepend.length<target) prepend.push(buildClutchMomentEvent(p));
+      if(prepend.length<target) prepend.push(buildPositionPlayEvent(p));
+    } else if(prepend.length<target){
+      p.quickMomentRotation=(p.quickMomentRotation||0)+1;
+      prepend.push(p.quickMomentRotation%2?buildClutchMomentEvent(p):buildPositionPlayEvent(p));
     }
-    var manualSlots=Math.max(0, MAX_SEASON_MANUAL_EVENTS - prepend.length);
+    var manualSlots=Math.max(0,target-prepend.length);
     if(manual.length>manualSlots){ auto=auto.concat(manual.splice(manualSlots)); }
     var events=prepend.concat(manual);
     var tier=p.pendingChallengeTier||'normal';
@@ -6934,23 +6889,6 @@
       var choiceIdx=randInt(0, aev.choices.length-1);
       return aev.choices[choiceIdx].resolve(p, state.seasonFlow.ctx);
     });
-    // 간편 진행 (Item 22, 2026-09): 간편 진행 중이라도 이적요청/대표팀 발탁/포지션 전환/에이전트
-    // 교체·장기계약/해외 진출처럼 커리어의 방향을 바꾸는 결정은 항상 사용자가 직접 고르게 한다 —
-    // (FA/일반 계약 협상/병역/은퇴는 애초에 이 이벤트 시스템 밖의 별도 seasonFlow 단계라 원래도
-    // 항상 수동이다.) 그 밖의 소소한 이벤트만 이번 시즌의 나머지와 함께 자동으로 처리되고, 그
-    // 결과는 "선수가 결정했습니다"가 아니라 "그 밖의 소소한 일들"로 구분해서 보여준다.
-    if((p.progressionMode||'story')==='simple' && state.seasonFlow.events.length>1){
-      var keepManual=[], collapseToAuto=[];
-      state.seasonFlow.events.forEach(function(aev, idx){
-        if(idx===0 || ALWAYS_MANUAL_EVENT_IDS[aev.id]) keepManual.push(aev);
-        else collapseToAuto.push(aev);
-      });
-      autoLines=autoLines.concat(collapseToAuto.map(function(aev){
-        var choiceIdx=randInt(0, aev.choices.length-1);
-        return aev.choices[choiceIdx].resolve(p, state.seasonFlow.ctx);
-      }));
-      state.seasonFlow.events=keepManual;
-    }
     if(autoLines.length) state.seasonFlow.resolvedNarratives.push('그 밖의 소소한 일들 — '+autoLines.join(' '));
 
     if(state.seasonFlow.events.length===0){ finalizeSeasonEvents(); }
@@ -7133,8 +7071,7 @@
       // Step 5 new-event persistent fields — included so their before/after hint preview reflects
       // the real effect of each choice rather than silently showing no change.
       growthPath:p.growthPath, managerFit:p.managerFit, rosterCompetitionWon:p.rosterCompetitionWon,
-      positionFlexible:p.positionFlexible, overseasInterest:p.overseasInterest,
-      mentorBond:p.mentorBond, agentAggressive:p.agentAggressive,
+      positionFlexible:p.positionFlexible, mentorBond:p.mentorBond, agentAggressive:p.agentAggressive,
       currentLeagueStandings:p.currentLeagueStandings
     };
   }
@@ -7838,11 +7775,6 @@
     var stayOffer=capSalaryOffer(p, baseOffer*(1+loyaltyBonus));
     var rivals=pickRivalTeams(p, 3).map(function(t){ return {team:t, offer:rivalFAOffer(p, t)}; });
     sf.fa={ stayOffer:stayOffer, rivals:rivals };
-    // 커리어 목표 실기능화: overseas_scouting_offer 이벤트에서 "적극적으로 관심을 표한다"를 골랐던
-    // 선수(overseasInterest===true)에게는 FA 시장에 실제로 해외 진출 협상 선택지가 열린다 — 예전에는
-    // 이벤트 문구만 있고 실제로 아무 곳에도 연결되지 않던 약속이었다.
-    var canOverseas = !!p.overseasInterest && !p.overseasMoveAchieved;
-    sf.fa.canOverseas=canOverseas;
     var cycleTotal=p.faCycleTotal||FA_FIRST_ELIGIBILITY_SEASONS;
     var html = renderSeasonStepIndicator('contract')+sceneArt('contract','FA 계약 협상')+
       '<div class="eyebrow">'+p.careerYears+'년차 · FA(자유계약)</div><h2>'+esc(p.name)+', FA 시장에 나서다</h2>'+
@@ -7850,7 +7782,6 @@
       '<div class="btn-row" style="flex-direction:column;align-items:stretch;">'+
         '<button class="btn btn-outline" style="text-align:left;" data-action="resolve-fa" data-choice="stay">잔류 — '+(p.team?esc(p.team.name):'현 소속팀')+'과 '+fmtMoney(stayOffer)+'/년에 재계약 '+salaryChangeLabel(p.salary, stayOffer)+'</button>'+
         rivals.map(function(r,i){ return '<button class="btn btn-outline" style="text-align:left;" data-action="resolve-fa" data-choice="'+i+'">이적 — '+esc(r.team.name)+'의 제안, '+fmtMoney(r.offer)+'/년 '+salaryChangeLabel(p.salary, r.offer)+' <span style="color:var(--ink-dim);font-size:12px;">('+teamMarketLabel(r.team)+'·'+teamPhilosophyLabel(r.team)+')</span></button>'; }).join('')+
-        (canOverseas ? '<button class="btn btn-outline" style="text-align:left;" data-action="resolve-fa" data-choice="overseas">해외 진출을 추진한다 — 해외 리그 구단과의 정식 협상 테이블</button>' : '')+
       '</div>'+
       '<p class="lede" style="font-size:13px;margin-top:14px;">'+(p.team?esc(p.team.name):'현 소속팀')+'은 그동안의 활약을 감안해 우선 협상 혜택을 제공합니다.</p>';
     openSeasonModal(html);
@@ -7865,16 +7796,6 @@
       p.salary=fa.stayOffer;
       narrative=(p.team?p.team.name:'현 소속팀')+'과 '+fmtMoney(fa.stayOffer)+'/년, '+dealYears+'년 계약으로 잔류 계약을 맺었습니다.';
       adjustFan(p, 6);
-    } else if(choice==='overseas'){
-      p.overseasMoveAchieved=true;
-      // Never let a headline "해외 진출" contract read as a pay CUT even for a player already
-      // sitting near their KBO-ability-based salary ceiling — same floor-at-current-salary
-      // defense used for the non-FA rival-offer fix (Item 1).
-      var overseasOffer=Math.max(oldSalary, capSalaryOffer(p, oldSalary*1.3));
-      p.salary=overseasOffer;
-      narrative='해외 리그 구단과 정식 협상을 마치고 '+fmtMoney(overseasOffer)+' 규모의 새 계약에 합의했습니다.';
-      adjustFan(p, 8);
-      p.highlights.push({year:p.careerYears, text:'오랫동안 꿈꿔온 해외 진출의 문을 실제로 열었습니다.'});
     } else {
       var idx=parseInt(choice,10);
       var pick=fa.rivals[idx];
@@ -7886,21 +7807,17 @@
     // Item 23: FA 재자격 기간은 최초보다 짧다(4시즌) — 매번 8시즌으로 리셋되지 않는다.
     p.yearsToFA=FA_REQUALIFY_SEASONS;
     p.faCycleTotal=FA_REQUALIFY_SEASONS;
-    // Item 23: FA 계약은 다년 계약 — choice!=='overseas'인 실제 KBO 잔류/이적 계약만 계약 기간
-    // 동안 재협상 없이 유지된다(해외 진출은 이 락 대상이 아니다 — 별도 트랙).
-    if(choice!=='overseas'){
-      p.contractYearsRemaining=Math.max(0, dealYears-1);
-      p.lastContractYears=dealYears;
-      p.lastContractAnnualSalary=p.salary;
-      p.lastContractTotal=p.salary*dealYears;
-    }
+    p.contractYearsRemaining=Math.max(0, dealYears-1);
+    p.lastContractYears=dealYears;
+    p.lastContractAnnualSalary=p.salary;
+    p.lastContractTotal=p.salary*dealYears;
     p.highlights.push({year:p.careerYears, text:narrative});
-    var contractCardHtml = (choice!=='overseas') ?
+    var contractCardHtml =
       '<div class="stat-line-grid" style="margin:14px 0;">'+
         '<div class="stat-line-cell"><div class="v">'+dealYears+'년</div><div class="l">계약 기간</div></div>'+
         '<div class="stat-line-cell"><div class="v">'+fmtMoney(p.salary)+'</div><div class="l">연봉</div></div>'+
         '<div class="stat-line-cell"><div class="v">'+fmtMoney(p.lastContractTotal||0)+'</div><div class="l">계약 총액(추정)</div></div>'+
-      '</div>' : '';
+      '</div>';
     var html = renderSeasonStepIndicator('contract')+
       '<div class="eyebrow">FA 계약 결과</div><h2>'+esc(p.name)+'의 새 계약</h2>'+
       '<p class="lede">'+esc(narrative)+' <span style="color:var(--ink-dim);font-size:13px;">(기존 연봉 '+fmtMoney(oldSalary)+' 대비 '+salaryChangeLabel(oldSalary, p.salary)+')</span></p>'+
@@ -8174,11 +8091,11 @@
         growthPath:null, growthPathBonusApplied:false, growthPathChangeAvailable:false, pendingTrainingPlan:'balance',
         eventHistory:[],
         managerFit:null, rosterCompetitionWon:null, positionFlexible:false,
-        overseasInterest:null, mentorBond:0, agentAggressive:false,
+        mentorBond:0, agentAggressive:false,
         careerGoal:c.careerGoal||CAREER_GOALS[0].id, simMode:c.simMode||SIM_MODES[0].id,
         totalSalaryEarnings:0, totalSigningBonus:0, totalIncentiveEarnings:0, faMoveCount:0, negotiationMoveCount:0,
         debutTeamName:null, teamMoveHistory:[],
-        injuryCount:0, overseasMoveAchieved:false, goalMilestoneHit:false
+        injuryCount:0, goalMilestoneHit:false
       };
       state.hsResult=null;
       state.screen='highschool';
