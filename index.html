@@ -1144,8 +1144,11 @@
       holds=Math.round(gamesCount*holdRate);
     }
     var whip=clamp((h+bb)/(ip||1),0.6,2.6);
+    // Store innings as baseball notation: 6.1 means 6 innings and 1 out.
+    var simulatedOuts=Math.max(0,Math.round(ip*3));
+    var officialIp=Math.floor(simulatedOuts/3)+(simulatedOuts%3)/10;
     return {
-      games:gamesCount, ip:ip, h:h, bb:bb, k:k, er:er, era:era,
+      games:gamesCount, ip:officialIp, h:h, bb:bb, k:k, er:er, era:era,
       wins:wins, losses:losses, saves:saves, holds:holds, whip:whip, injury:injury
     };
   }
@@ -1161,7 +1164,10 @@
     line.losses = Math.max(0, Math.round(line.losses));
     line.saves = Math.max(0, Math.round(line.saves));
     line.holds = Math.max(0, Math.round(line.holds||0));
-    var outs=Math.max(0,Math.round((line.ip||0)*3));
+    var rawIp=Math.max(0,line.ip||0);
+    var wholeIp=Math.floor(rawIp), fractionDigit=Math.round((rawIp-wholeIp)*10);
+    // Existing saves may hold decimal innings (e.g. 6.7). New lines use 6.0/6.1/6.2.
+    var outs=fractionDigit<=2 ? wholeIp*3+fractionDigit : Math.round(rawIp*3);
     line.ip=Math.floor(outs/3)+(outs%3)*0.1;
     var realIp=outs/3;
     line.era=realIp?Math.max(0,(line.er*9)/realIp):0;
