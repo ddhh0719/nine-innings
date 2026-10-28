@@ -126,6 +126,13 @@
   .secondary-details{margin-top:16px;color:var(--ink-dim);font-size:13px;}
   @media(max-width:700px){.hub-grid{grid-template-columns:1fr;}.player-card{position:static;}.bn-btn{font-size:11px;}}
 
+
+  .community-list{display:grid;gap:9px;margin:12px 0 20px;}
+  .community-post{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:11px 14px;}
+  .community-post>div{display:flex;align-items:center;justify-content:space-between;gap:9px;}
+  .community-post b{font-size:12px;}.community-post span,.community-post small{font-size:11px;color:var(--ink-dim);}
+  .community-post p{font-size:13px;margin:7px 0;line-height:1.7;}
+
   /* ---------- scoreboard header ---------- */
   #scoreboard-bar{
     position:sticky;top:0;z-index:20;
@@ -5677,6 +5684,78 @@
     $('#tab-life').innerHTML=html;
   }
 
+
+  // Community reactions are actual saved content, not a raw hidden 0-100 meter.
+  var FAN_NICKNAMES=['직관러27','파란유니폼','야구보는직장인','응원석3열','오늘도9회','수비장인팬','원정도간다','시즌권러','느린커브','중계보다직관','풀카운트'];
+  function fanPost(p,text,tone,kind){
+    migratePlayerData(p);
+    var entry={year:p.careerYears,kind:kind||'시즌',by:pick(FAN_NICKNAMES),tone:tone||'neutral',text:text,likes:randInt(2,320)};
+    p.fanFeed.push(entry);
+    if(p.fanFeed.length>100)p.fanFeed.splice(0,p.fanFeed.length-100);
+    return entry;
+  }
+  function recordSeasonFanPosts(p,line,awards){
+    var batter=p.position==='batter';
+    var good=batter?((line.ops||0)>=.85||(line.hr||0)>=25):((line.era||99)<3.4||((line.k||0)>=150));
+    var bad=batter?((line.avg||0)<.225):((line.era||0)>5.3 && (line.ip||0)>30);
+    var posts=[];
+    if(good){
+      posts.push(pick(['오늘 활약 진짜 대단하다. 이런 경기는 오래 기억날 듯!','올해 성장한 게 눈에 보인다. 다음 시즌도 기대한다.','그라운드에서 자신감이 느껴지더라. 정말 든든하다.']));
+    }else if(bad){
+      posts.push(pick(['최근 경기 내용이 너무 아쉽다. 다시 올라와 줬으면.','팬으로서는 답답하지만 반등할 기회는 아직 있다.','지금은 결과가 안 나와도 훈련한 만큼 보여주길.']));
+    }else{
+      posts.push(pick(['시즌 내내 꾸준히 뛰어준 건 인정해야지.','화려하진 않아도 이런 선수가 팀에 꼭 필요하다.','성적도 중요하지만 내년엔 더 좋은 모습을 보고 싶다.']));
+    }
+    if(batter){
+      posts.push((line.hr||0)>=20?pick(['장타가 경기 분위기를 완전히 바꾸네.','홈런 장면만 다시 보고 있다.']):
+        pick(['타석에서 더 침착해졌으면 한다.','요즘 공 골라내는 모습이 점점 나아지는 듯.']));
+      if((line.errors||0)>10)posts.push('수비 집중력은 확실히 개선이 필요하다.');
+      else if((p.stats.defense||0)>=75)posts.push('오늘도 안정적인 수비, 보이지 않는 공헌이 크다.');
+    }else{
+      posts.push((line.k||0)>=100?pick(['결정구 위력이 확실히 살아 있다.','삼진 잡는 장면은 정말 짜릿해.']):
+        pick(['위기에서의 제구를 더 보고 싶다.','투수 운영이 점점 안정되는 느낌이다.']));
+      if(p.subrole==='마무리')posts.push('9회가 되면 심장이 너무 빨리 뛴다. 마무리 믿는다!');
+      else if(p.subrole==='선발')posts.push('선발투수가 이닝을 버텨주면 팀 전체가 편해진다.');
+      else posts.push('중간계투가 버텨줘야 뒷문까지 갈 수 있다.');
+    }
+    if((awards||[]).length)posts.push('수상 축하! '+awards.slice(0,2).join(', ')+' 받을 만했다.');
+    if(line.injury)posts.push('부상 소식은 너무 속상하다. 완전히 회복하고 돌아오길.');
+    var spending=(p.lifeLedger||[]).filter(function(x){return x.year===p.careerYears;});
+    if(spending.length){
+      var last=spending[spending.length-1];
+      if(last.id==='charity'||last.id==='fanmeet')posts.push('경기장 밖에서도 팬들을 생각해 주는 모습 보기 좋다!');
+      else if(last.id==='club')posts.push('비시즌에 그렇게 큰 파티를 해야 했나? 자기 관리가 걱정된다.');
+      else if(last.price>=10000)posts.push('고가 장비 투자가 경기력으로 증명되면 좋겠다.');
+      else posts.push('새로운 준비를 했다던데 내년에 어떤 변화가 있을지 궁금하다.');
+    }
+    if((p.fanApproval||50)<30)posts.push('팬심은 무한하지 않다. 다음 시즌에는 달라진 모습을 보여줘.');
+    else if((p.fanApproval||50)>75)posts.push('우리 팀의 얼굴 같은 선수. 오래 함께하자!');
+    posts=posts.slice(0,6);
+    posts.forEach(function(t){fanPost(p,t,/걱정|아쉽|답답|속상|개선|달라진/.test(t)?'mixed':'positive','시즌');});
+    return posts.length;
+  }
+  function recordContractFanPosts(p,narrative){
+    var transfer=/이적|트레이드|잔류|재계약/.test(narrative);
+    fanPost(p,transfer?pick([
+       '선수의 선택은 존중하지만 새로운 유니폼은 아직 낯설다.',
+       '구단과 선수 모두 생각이 있었겠지. 새 출발 응원한다.',
+       '계약이 드디어 정리됐네. 이제 경기에만 집중하자.'
+     ]):pick([
+       '연봉 계약이 끝났으니 이제 경기력으로 증명하면 된다.',
+       '이번 계약이 좋은 시즌의 시작이었으면 좋겠다.',
+       '그동안 뛰어온 걸 생각하면 납득할 만한 조건이다.'
+     ]),'mixed','계약');
+    fanPost(p,(p.salary||0)>40000?'고액 계약인 만큼 기대도 크다. 성적이 뒷받침되길.':'다음 시즌에도 팀에 힘이 되어줘!','neutral','계약');
+  }
+  function renderFanPosts(p,count,kind){
+    var posts=(p.fanFeed||[]).filter(function(item){return !kind||item.kind===kind;}).slice(-count).reverse();
+    if(!posts.length)return '<p class="lede">시즌을 마치거나 계약을 체결하면 실제 선택과 성적을 반영한 댓글이 쌓입니다.</p>';
+    return '<div class="community-list">'+posts.map(function(post){
+      return '<article class="community-post"><div><b>'+esc(post.by)+'</b><span>'+post.year+'년차 · '+esc(post.kind)+'</span></div>'+
+      '<p>'+esc(post.text)+'</p><small>공감 '+post.likes+'</small></article>';
+    }).join('')+'</div>';
+  }
+
   /* ---- hub ---- */
   function renderHub(){
     var p=state.player;
@@ -5779,13 +5858,14 @@
         '<p class="lede" style="font-size:12px;">'+esc((TRAINING_PLANS.filter(function(tp){ return tp.id===curPlan; })[0]||{}).hint||'')+'</p>';
     }
 
+    html += '<h3 class="life-subhead">최근 팬 커뮤니티</h3>'+renderFanPosts(p,3);
     if(p.highlights && p.highlights.length){
-      html += '<hr class="divider"><h3 style="font-size:15px;">최근 소식</h3>'+
+      html += '<details class="secondary-details"><summary>이전 시즌 소식 보기</summary><h3 style="font-size:15px;">최근 소식</h3>'+
         p.highlights.slice(-3).reverse().map(function(h){
           return '<div class="log-item"><span class="tag">'+h.year+'년</span>'+esc(h.text)+'</div>';
-        }).join('');
+        }).join('')+'</details>';
     } else {
-      html += '<hr class="divider"><p class="lede" style="font-size:13px;">첫 시즌을 진행하면 이곳에 소식이 쌓입니다.</p>';
+      html += '<p class="lede" style="font-size:13px;">첫 시즌을 진행하면 이곳에 소식이 쌓입니다.</p>';
     }
 
     if(p.positionPlayHistory && p.positionPlayHistory.length){
@@ -5992,7 +6072,8 @@
   // 커리어 — 소속팀 이력, 병역/국가대표, 라이벌 비교, 업적, 커리어 하이라이트 (최근만 기본 노출, 전체보기로 확장).
   function renderTabCareer(){
     var p=state.player;
-    var html = '<div class="eyebrow">커리어</div><h2>'+esc(p.name)+'의 발자취</h2>';
+    var html = '<div class="eyebrow">커리어</div><h2>'+esc(p.name)+'의 발자취</h2>'+
+      '<h3 class="life-subhead">누적 팬 커뮤니티</h3>'+renderFanPosts(p,12);
 
     if(p.careerGoal){
       var goalInfo=CAREER_GOALS.filter(function(g){ return g.id===p.careerGoal; })[0];
@@ -7343,6 +7424,7 @@
     // a save/reload never re-rolls it).
     var leagueBoards = generateSeasonLeagueRecords(p, line);
     var awards = recordKingAwardsFromBoards(leagueBoards).concat(determineAwards(p, line, isRookie));
+    recordSeasonFanPosts(p,line,awards);
 
     p.history.push({year:p.careerYears, age:p.age, teamName:p.team?p.team.name:'무소속', line:line, leagueBoards:leagueBoards});
     p.careerScore=(p.careerScore||0)+awardScore;
@@ -7697,6 +7779,7 @@
       core.map(function(pr){ return '<div class="stat-line-cell"><div class="v">'+pr[0]+'</div><div class="l">'+pr[1]+'</div></div>'; }).join('')+
     '</div>';
 
+    html += '<h3 class="life-subhead">시즌 종료 커뮤니티 반응</h3>'+renderFanPosts(p,4,'시즌');
     var narratives=(sf.resolvedNarratives||[]).concat(sf.hi||[]);
     html += narratives.slice(0,3).map(function(t){ return '<div class="log-item">'+esc(t)+'</div>'; }).join('');
 
@@ -7734,6 +7817,7 @@
     } else {
       html += '<p class="lede">이번 시즌은 특별한 수상이 없었습니다. 다음 시즌을 기약합니다.</p>';
     }
+    html += '<h3 class="life-subhead">시상식 이후 팬 반응</h3>'+renderFanPosts(p,3,'시즌');
     if(sf.reason){
       // Item 25: the hard age cap ('나이') is still a final, no-choice limit — but the softer
       // triggers ('고령' — the new probabilistic age/OVR/성적/부상 roll — and '방출') now offer a real
@@ -7933,6 +8017,7 @@
     p.lastContractAnnualSalary=p.salary;
     p.lastContractTotal=p.salary*dealYears;
     p.highlights.push({year:p.careerYears, text:narrative});
+    recordContractFanPosts(p,narrative);
     var contractCardHtml =
       '<div class="stat-line-grid" style="margin:14px 0;">'+
         '<div class="stat-line-cell"><div class="v">'+dealYears+'년</div><div class="l">계약 기간</div></div>'+
@@ -7941,7 +8026,7 @@
       '</div>';
     var html = renderSeasonStepIndicator('contract')+
       '<div class="eyebrow">FA 계약 결과</div><h2>'+esc(p.name)+'의 새 계약</h2>'+
-      '<p class="lede">'+esc(narrative)+' <span style="color:var(--ink-dim);font-size:13px;">(기존 연봉 '+fmtMoney(oldSalary)+' 대비 '+salaryChangeLabel(oldSalary, p.salary)+')</span></p>'+
+      '<p class="lede">'+esc(narrative)+' <span style="color:var(--ink-dim);font-size:13px;">(기존 연봉 '+fmtMoney(oldSalary)+' 대비 '+salaryChangeLabel(oldSalary, p.salary)+')</span></p>'+renderFanPosts(p,2,'계약')+
       contractCardHtml+
       '<div class="btn-row"><button class="btn btn-primary" data-action="season-to-advance">다음 시즌으로</button></div>';
     openSeasonModal(html);
@@ -8086,12 +8171,13 @@
     p.pendingTradeRequest=false;
 
     p.highlights.push({year:p.careerYears, text:narrative});
+    recordContractFanPosts(p,narrative);
 
     var oldSalary=sf&&sf.oldSalaryForDisplay;
     var changeHtml = oldSalary ? ' <span style="color:var(--ink-dim);font-size:13px;">(기존 연봉 '+fmtMoney(oldSalary)+' 대비 '+salaryChangeLabel(oldSalary, p.salary)+')</span>' : '';
     var html = renderSeasonStepIndicator('contract')+
       '<div class="eyebrow">협상 결과</div><h2>'+esc(p.name)+'의 새 계약</h2>'+
-      '<p class="lede">'+esc(narrative)+changeHtml+'</p>'+
+      '<p class="lede">'+esc(narrative)+changeHtml+'</p>'+renderFanPosts(p,2,'계약')+
       '<div class="btn-row"><button class="btn btn-primary" data-action="season-to-advance">다음 시즌으로</button></div>';
     openSeasonModal(html);
   }
