@@ -5632,14 +5632,18 @@
     {id:'club',label:'클럽 대관 행사',price:4600,type:'activity',fan:-10,mood:0.28,desc:'사기 진작 효과 큼, 팬 여론 크게 하락'},
     {id:'media',label:'개인 영상 제작',price:1500,type:'activity',fan:6,mood:-0.05,desc:'관심 증가, 피로도 증가'},
     {id:'focus',label:'전담 심리 상담',price:2100,type:'activity',stat:'mental',gain:1,mood:0.10,desc:'멘탈 +1, 다음 시즌 분위기 상승'},
-    {id:'training',label:'비시즌 특별 합숙',price:7800,type:'activity',stat:'mental',gain:2,mood:-0.09,desc:'멘탈 +2, 훈련 피로'}
+    {id:'training',label:'비시즌 특별 합숙',price:7800,type:'activity',stat:'mental',gain:2,mood:-0.09,desc:'멘탈 +2, 훈련 피로'},
+    {id:'watch',label:'한정판 시계',price:13500,type:'luxury',mood:0.08,fan:-3,desc:'소장하는 기쁨, 과시 소비로 팬 여론 소폭 하락'},
+    {id:'sports_car',label:'고급 스포츠카',price:35000,type:'luxury',mood:0.25,fan:-10,desc:'강한 사기 진작, 사치 논란으로 팬 여론 하락'},
+    {id:'villa',label:'전용 휴양 별장',price:47000,type:'luxury',stat:'mental',gain:3,mood:0.18,fan:-5,desc:'멘탈 +3, 충분한 개인 휴식 공간'},
+    {id:'academy',label:'개인 트레이닝 센터 설립',price:65000,type:'luxury',stat:'mental',gain:5,mood:0.10,fan:5,desc:'멘탈 +5, 후배 육성과 팬 여론 상승'}
   ];
   function availableLifeItems(p){
     return LIFE_SHOP.filter(function(item){return !item.position||item.position===p.position;});
   }
   function canBuyLifeItem(p,item){
     if(!item || (item.position&&item.position!==p.position)||(p.wallet||0)<item.price)return false;
-    if(item.type==='gear')return !(p.ownedEquipment||[]).includes(item.id);
+    if(item.type!=='activity')return !(p.ownedEquipment||[]).includes(item.id);
     return (p.lifeActionsYear||{})[item.id]!==p.careerYears;
   }
   function purchaseLifeItem(p,id){
@@ -5647,7 +5651,7 @@
     var item=availableLifeItems(p).filter(function(i){return i.id===id;})[0];
     if(!canBuyLifeItem(p,item))return false;
     p.wallet=Math.max(0,(p.wallet||0)-item.price);
-    if(item.type==='gear')p.ownedEquipment.push(item.id);
+    if(item.type!=='activity')p.ownedEquipment.push(item.id);
     else p.lifeActionsYear[item.id]=p.careerYears;
     if(item.stat && p.stats[item.stat]!==undefined){
       p.stats[item.stat]=clamp((p.stats[item.stat]||50)+(item.gain||0),10,99);
@@ -5671,10 +5675,10 @@
     var html='<div class="eyebrow">라이프</div><h2>연봉으로 만드는 야구 인생</h2>'+
       '<p class="lede">실제 보유 금액으로 구매합니다. 장비는 1회, 활동은 시즌당 1회 가능합니다. 비용과 효과를 비교해 선택해 보세요.</p>'+
       '<div class="wallet-hero"><span>현재 사용 가능 금액</span><strong>'+fmtMoney(p.wallet||0)+'</strong><small>통산 수입 '+fmtMoney(p.totalEarnings||0)+' · 통산 지출 '+fmtMoney(Math.max(0,(p.totalEarnings||0)-(p.wallet||0)))+'</small></div>';
-    ['gear','activity'].forEach(function(group){
-      html+='<h3 class="life-subhead">'+(group==='gear'?'장비 및 시설':'여가, 활동 및 팬 서비스')+'</h3><div class="life-grid">';
+    ['gear','luxury','activity'].forEach(function(group){
+      html+='<h3 class="life-subhead">'+(group==='gear'?'장비 및 시설':group==='luxury'?'귀중품 및 대형 투자':'여가, 활동 및 팬 서비스')+'</h3><div class="life-grid">';
       availableLifeItems(p).filter(function(i){return i.type===group;}).forEach(function(item){
-        var owned=group==='gear'&&(p.ownedEquipment||[]).includes(item.id);
+        var owned=group!=='activity'&&(p.ownedEquipment||[]).includes(item.id);
         var done=group==='activity'&&(p.lifeActionsYear||{})[item.id]===p.careerYears;
         html+='<article class="life-item"><h4>'+esc(item.label)+'</h4><p>'+esc(item.desc)+'</p>'+
           '<div class="life-purchase"><b>'+fmtMoney(item.price)+'</b><button class="btn btn-outline" data-action="buy-life" data-item="'+item.id+'"'+
