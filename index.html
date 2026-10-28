@@ -5604,6 +5604,79 @@
     openSeasonModal(html);
   }
 
+
+  // Lifestyle economy: same unit as salary, 10,000 KRW.
+  var LIFE_SHOP=[
+    {id:'cleats',label:'맞춤 경기화',price:700,type:'gear',stat:'speed',gain:1,desc:'주력 +1'},
+    {id:'glove',label:'프로 수비 글러브',price:1600,type:'gear',position:'batter',stat:'defense',gain:2,desc:'수비 +2'},
+    {id:'bat',label:'프리미엄 배트 세트',price:2400,type:'gear',position:'batter',stat:'power',gain:2,fan:-2,desc:'파워 +2, 사치 논란으로 여론 소폭 하락'},
+    {id:'cage',label:'개인 타격 분석 장비',price:5600,type:'gear',position:'batter',stat:'contact',gain:3,desc:'정교함 +3'},
+    {id:'pitchlab',label:'맞춤 투구 분석 장비',price:5600,type:'gear',position:'pitcher',stat:'control',gain:3,desc:'제구 +3'},
+    {id:'armcare',label:'고급 회복 장비',price:2400,type:'gear',position:'pitcher',stat:'stamina',gain:2,desc:'체력 +2'},
+    {id:'fitness',label:'개인 운동 시설',price:11500,type:'gear',stat:'mental',gain:3,fan:-2,desc:'멘탈 +3, 과한 소비라는 시선'},
+    {id:'elitecamp',label:'전담 훈련 센터',price:22000,type:'gear',stat:'mental',gain:5,fan:-4,desc:'멘탈 +5, 비용에 비례하는 강력한 투자'},
+    {id:'rest',label:'전문 회복 프로그램',price:800,type:'activity',mood:0.15,desc:'다음 시즌 분위기 상승'},
+    {id:'travel',label:'해외 휴양 여행',price:3000,type:'activity',mood:0.23,fan:2,desc:'휴식 효과 큼, 팬 여론 소폭 상승'},
+    {id:'charity',label:'지역 사회 기부',price:3200,type:'activity',fan:13,mood:0.04,desc:'팬 여론 크게 상승'},
+    {id:'fanmeet',label:'팬미팅 개최',price:700,type:'activity',fan:8,desc:'팬과의 소통으로 여론 상승'},
+    {id:'club',label:'클럽 대관 행사',price:4600,type:'activity',fan:-10,mood:0.28,desc:'사기 진작 효과 큼, 팬 여론 크게 하락'},
+    {id:'media',label:'개인 영상 제작',price:1500,type:'activity',fan:6,mood:-0.05,desc:'관심 증가, 피로도 증가'},
+    {id:'focus',label:'전담 심리 상담',price:2100,type:'activity',stat:'mental',gain:1,mood:0.10,desc:'멘탈 +1, 다음 시즌 분위기 상승'},
+    {id:'training',label:'비시즌 특별 합숙',price:7800,type:'activity',stat:'mental',gain:2,mood:-0.09,desc:'멘탈 +2, 훈련 피로'}
+  ];
+  function availableLifeItems(p){
+    return LIFE_SHOP.filter(function(item){return !item.position||item.position===p.position;});
+  }
+  function canBuyLifeItem(p,item){
+    if(!item || (item.position&&item.position!==p.position)||(p.wallet||0)<item.price)return false;
+    if(item.type==='gear')return !(p.ownedEquipment||[]).includes(item.id);
+    return (p.lifeActionsYear||{})[item.id]!==p.careerYears;
+  }
+  function purchaseLifeItem(p,id){
+    migratePlayerData(p);
+    var item=availableLifeItems(p).filter(function(i){return i.id===id;})[0];
+    if(!canBuyLifeItem(p,item))return false;
+    p.wallet=Math.max(0,(p.wallet||0)-item.price);
+    if(item.type==='gear')p.ownedEquipment.push(item.id);
+    else p.lifeActionsYear[item.id]=p.careerYears;
+    if(item.stat && p.stats[item.stat]!==undefined){
+      p.stats[item.stat]=clamp((p.stats[item.stat]||50)+(item.gain||0),10,99);
+    }
+    if(item.fan)adjustFan(p,item.fan);
+    if(item.mood)p.shopSeasonMood=clamp((p.shopSeasonMood||0)+item.mood,-0.5,0.55);
+    p.lifeLedger.push({year:p.careerYears,id:item.id,label:item.label,price:item.price});
+    if(p.lifeLedger.length>40)p.lifeLedger.shift();
+    p.highlights.push({year:p.careerYears,text:item.label+'에 '+fmtMoney(item.price)+'을 투자했습니다. '+item.desc});
+    return true;
+  }
+  function renderStatProfile(p,short){
+    return '<div class="skill-grid'+(short?' compact':'')+'">'+statList(p.position).map(function(item){
+      var v=clamp(p.stats[item.key]||0,0,99);
+      return '<div class="skill"><div class="skill-head"><b>'+esc(item.label)+'</b><span>'+v+' / 99 · '+statTierLabel(v)+'</span></div>'+
+        '<div class="skill-track"><span style="width:'+v+'%"></span></div></div>';
+    }).join('')+'</div>';
+  }
+  function renderTabLife(){
+    var p=state.player;
+    var html='<div class="eyebrow">라이프</div><h2>연봉으로 만드는 야구 인생</h2>'+
+      '<p class="lede">실제 보유 금액으로 구매합니다. 장비는 1회, 활동은 시즌당 1회 가능합니다. 비용과 효과를 비교해 선택해 보세요.</p>'+
+      '<div class="wallet-hero"><span>현재 사용 가능 금액</span><strong>'+fmtMoney(p.wallet||0)+'</strong><small>통산 수입 '+fmtMoney(p.totalEarnings||0)+' · 통산 지출 '+fmtMoney(Math.max(0,(p.totalEarnings||0)-(p.wallet||0)))+'</small></div>';
+    ['gear','activity'].forEach(function(group){
+      html+='<h3 class="life-subhead">'+(group==='gear'?'장비 및 시설':'여가, 활동 및 팬 서비스')+'</h3><div class="life-grid">';
+      availableLifeItems(p).filter(function(i){return i.type===group;}).forEach(function(item){
+        var owned=group==='gear'&&(p.ownedEquipment||[]).includes(item.id);
+        var done=group==='activity'&&(p.lifeActionsYear||{})[item.id]===p.careerYears;
+        html+='<article class="life-item"><h4>'+esc(item.label)+'</h4><p>'+esc(item.desc)+'</p>'+
+          '<div class="life-purchase"><b>'+fmtMoney(item.price)+'</b><button class="btn btn-outline" data-action="buy-life" data-item="'+item.id+'"'+
+          (canBuyLifeItem(p,item)?'':' disabled')+'>'+(owned?'구매 완료':done?'시즌 이용 완료':(p.wallet||0)<item.price?'잔액 부족':'선택하기')+'</button></div></article>';
+      });
+      html+='</div>';
+    });
+    if(p.lifeLedger.length)html+='<details class="secondary-details"><summary>최근 소비 내역</summary>'+
+      p.lifeLedger.slice(-8).reverse().map(function(e){return '<div class="log-item">'+e.year+'년차 · '+esc(e.label)+' · '+fmtMoney(e.price)+'</div>';}).join('')+'</details>';
+    $('#tab-life').innerHTML=html;
+  }
+
   /* ---- hub ---- */
   function renderHub(){
     var p=state.player;
