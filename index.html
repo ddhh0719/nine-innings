@@ -5272,8 +5272,10 @@
   }
   function renderEventVisual(category){
     var v=eventCategoryVisual(category);
-    return '<div class="event-visual" style="--ev-color:'+v.color+';--ev-color-bg:'+hex2rgba(v.color,0.16)+';">'+
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">'+v.icon+'</svg></div>';
+    var key=EVENT_CATEGORY_VISUAL[category]?category:'default';
+    return '<div class="event-visual event-visual-media" style="--ev-color:'+v.color+';--ev-color-bg:'+hex2rgba(v.color,0.16)+';">'+
+      '<span class="event-visual-fallback"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">'+v.icon+'</svg></span>'+
+      '<img data-optional-art="category" loading="lazy" alt="'+esc(category||'경기 상황')+' 일러스트" src="assets/images/categories/'+key+'.webp"></div>';
   }
   var DEFAULT_EVENT_COOLDOWN_YEARS = 2;
   function eventOnCooldown(e, p){
@@ -5412,9 +5414,47 @@
   document.addEventListener('error',function(e){
     var image=e.target;
     if(!image || image.tagName!=='IMG')return;
+    if(image.dataset&&image.dataset.optionalArt){image.remove();return;}
     if(image.closest){
       var card=image.closest('.scene-art');
       if(card) card.remove();
+    }
+  },true);
+
+
+  // All future illustrations are optional; upload files to these folders.
+  var TEAM_ART_FILENAMES={
+    '서울 코메츠':'seoul_comets','인천 실버웨일스':'incheon_silverwhales',
+    '수원 팰컨스':'suwon_falcons','대전 볼케이노스':'daejeon_volcanoes',
+    '대구 스콜피온스':'daegu_scorpions','부산 타이푼스':'busan_typhoons',
+    '광주 파이오니어스':'gwangju_pioneers','창원 로켓츠':'changwon_rockets',
+    '청주 그리폰스':'cheongju_gryphons','제주 드래곤테일즈':'jeju_dragontails'
+  };
+  function teamLogoHtml(team,extraClass){
+    var name=typeof team==='string'?team:team&&team.name||'';
+    var slug=TEAM_ART_FILENAMES[name],teamData=teamByName(name);
+    var bg=(teamData&&teamData.color)||'#527967';
+    var glyph=name?name.charAt(0):'⚾';
+    var cls=extraClass==='mini'?' team-logo-mini':extraClass==='small'?' team-logo-small':'';
+    return '<span class="team-logo-slot'+cls+'" style="--logo-accent:'+bg+'">'+
+      '<span class="team-logo-fallback">'+esc(glyph)+'</span>'+
+      (slug?'<img data-optional-art="team" loading="lazy" alt="'+esc(name)+' 구단 로고" src="assets/images/teams/'+slug+'.webp">':'')+'</span>';
+  }
+  function careerArt(id,label){
+    if(!/^(retirement|callup|futures|trade|mvp|gold_glove|allstar|record|comeback|military|rookie|first_hit|first_home_run|championship)$/.test(id))return '';
+    return '<figure class="scene-art career-scene"><img loading="lazy" src="assets/images/career/'+id+'.webp" alt="'+esc(label||'선수 커리어 특별 장면')+'"></figure>';
+  }
+  function lifeItemArt(item){
+    // Filename equals LIFE_SHOP ID: e.g., assets/images/life/sports_car.webp
+    var key=/^[a-z0-9_]+$/.test(item.id)?item.id:'';
+    return '<div class="life-art-slot" aria-hidden="true">'+
+      '<span class="life-art-fallback">'+(item.type==='gear'?'장비':item.type==='luxury'?'컬렉션':'활동')+'</span>'+
+      (key?'<img data-optional-art="life" loading="lazy" src="assets/images/life/'+key+'.webp" alt="">':'')+'</div>';
+  }
+  document.addEventListener('load',function(e){
+    var image=e.target;
+    if(image&&image.tagName==='IMG'&&image.dataset&&image.dataset.optionalArt && image.parentElement){
+      image.parentElement.classList.add('asset-ready');
     }
   },true);
 
@@ -5610,7 +5650,7 @@
           '<div class="stat-line-cell"><div class="v">'+fmtMoney(d.bonus)+'</div><div class="l">계약금 (입단 시 1회)</div></div>'+
           '<div class="stat-line-cell"><div class="v">'+fmtMoney(startingSalary(d))+'</div><div class="l">첫 시즌 연봉</div></div>'+
         '</div>'+
-        '<p class="lede"><span class="team-badge" style="background:'+d.team.color+';width:28px;height:28px;font-size:13px;display:inline-flex;vertical-align:middle;margin-right:8px;border-radius:6px;">'+esc(p.name[0])+'</span>'+
+        '<p class="lede">'+teamLogoHtml(d.team,'mini')+
         '<b style="font-family:var(--font-display);font-size:18px;">'+esc(d.team.name)+'</b>가(이) '+esc(p.name)+' 선수를 지명했습니다.</p>';
       actions.innerHTML='<button class="btn btn-primary" data-action="start-pro-career">프로 데뷔</button>';
     } else {
@@ -5709,7 +5749,7 @@
       availableLifeItems(p).filter(function(i){return i.type===group;}).forEach(function(item){
         var owned=group!=='activity'&&(p.ownedEquipment||[]).includes(item.id);
         var done=group==='activity'&&(p.lifeActionsYear||{})[item.id]===p.careerYears;
-        html+='<article class="life-item"><h4>'+esc(item.label)+'</h4><p>'+esc(item.desc)+'</p>'+
+        html+='<article class="life-item">'+lifeItemArt(item)+'<h4>'+esc(item.label)+'</h4><p>'+esc(item.desc)+'</p>'+
           '<div class="life-purchase"><b>'+fmtMoney(item.price)+'</b><button class="btn btn-outline" data-action="buy-life" data-item="'+item.id+'"'+
           (canBuyLifeItem(p,item)?'':' disabled')+'>'+(owned?'구매 완료':done?'시즌 이용 완료':(p.wallet||0)<item.price?'잔액 부족':'선택하기')+'</button></div></article>';
       });
@@ -5808,7 +5848,7 @@
     // longer a permanently-visible big red control).
     $('#player-card').innerHTML =
       '<div class="pc-head">'+
-        '<div class="team-badge" style="background:'+(p.team?p.team.color:'#666')+'">'+esc(p.name[0])+'</div>'+
+        teamLogoHtml(p.team)+
         '<div><div class="pc-name">'+esc(p.name)+'</div><div class="pc-sub">'+(p.position==='pitcher'?'투수':'타자')+' · '+esc(p.subrole)+(archLabel?' · '+esc(archLabel):'')+'</div></div>'+
       '</div>'+
       '<div class="ovr-badge"><span class="n">'+ovr+'</span><span class="l">종합</span></div>'+
@@ -6427,7 +6467,7 @@
       var trendSym = r.trend==='up' ? '▲' : r.trend==='down' ? '▼' : '-';
       var trendClass = r.trend==='up' ? 'trend-up' : r.trend==='down' ? 'trend-down' : 'trend-same';
       html += '<tr class="'+(isMine?'my-team':'')+(r.rank===5?' postseason-cutoff':'')+'">'+
-        '<td>'+r.rank+'</td><td class="col-team">'+esc(r.team)+'</td><td>'+r.wins+'</td><td>'+r.losses+'</td>'+
+        '<td>'+r.rank+'</td><td class="col-team"><span class="team-with-logo">'+teamLogoHtml(r.team,'small')+esc(r.team)+'</span></td><td>'+r.wins+'</td><td>'+r.losses+'</td>'+
         '<td>'+r.pct.toFixed(3)+'</td><td class="'+trendClass+'">'+trendSym+'</td>'+
       '</tr>';
     });
@@ -6516,7 +6556,7 @@
     var ct=careerTitle(p);
     var totals=aggregateCareer(p);
     var traits=deriveTraits(p, totals);
-    var html = '<div class="eyebrow">은퇴</div>'+
+    var html = careerArt('retirement','선수 은퇴식')+'<div class="eyebrow">은퇴</div>'+
       '<h1>'+esc(p.name)+', 유니폼을 벗다</h1>'+
       '<p class="lede">만 '+p.age+'세, 프로 '+p.careerYears+'년의 커리어를 마무리했습니다'+(state.forcedRetireReason==='나이'?' (은퇴 연한에 따른 은퇴)':state.forcedRetireReason==='방출'?' (부진으로 인한 방출 후 은퇴)':state.forcedRetireReason==='고령'?' (노쇠화를 받아들이며 스스로 결정한 은퇴)':'')+'.</p>'+
       '<div class="stat-line-grid" style="margin:22px 0;">'+
@@ -7288,7 +7328,8 @@
   }
   function renderFuturesReportStep(){
     var p=state.player, line=p.futuresLastLine, outcome=p.futuresOutcome;
-    var html = '<div class="eyebrow">'+p.careerYears+'년차 · 퓨처스리그 시즌</div><h2>'+esc(p.name)+' — 2군 시즌 결과</h2>';
+    var html = (outcome.outcome==='callup'?careerArt('callup','1군 승격'):(outcome.outcome==='seconddraft'?careerArt('trade','구단 변경'):careerArt('futures','퓨처스리그 훈련')))+
+      '<div class="eyebrow">'+p.careerYears+'년차 · 퓨처스리그 시즌</div><h2>'+esc(p.name)+' — 2군 시즌 결과</h2>';
     if(p.position==='batter'){
       html += '<div class="stat-line-grid">'+
         [[line.games,'경기'],[line.ab,'타수'],[line.h,'안타'],[line.hr,'홈런'],[line.rbi,'타점']]
@@ -7988,7 +8029,9 @@
 
   function renderAwardsStep(){
     var sf=state.seasonFlow, p=state.player;
-    var html = renderSeasonStepIndicator('awards')+(p.lastSeasonChampion?sceneArt('champion','한국시리즈 우승 축하'):'' )+
+    var awardArt=sf.awards.some(function(a){return /MVP|최우수/.test(a);})?careerArt('mvp','최우수선수 시상식'):
+      sf.awards.some(function(a){return /골든글러브/.test(a);})?careerArt('gold_glove','골든글러브 시상식'):'';
+    var html = renderSeasonStepIndicator('awards')+(p.lastSeasonChampion?sceneArt('champion','한국시리즈 우승 축하'):awardArt)+
       '<div class="eyebrow">'+p.careerYears+'년차 연말 시상식</div><h2>시상식</h2>';
     if(sf.awards.length){
       html += '<p class="lede" style="font-size:19px;color:var(--ink);font-weight:700;">'+esc(p.name)+' — '+sf.awards.join(' · ')+' 수상!</p>';
