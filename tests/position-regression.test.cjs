@@ -6,7 +6,7 @@ const found=html.match(/<script>([\s\S]*?)<\/script>/);
 assert.ok(found,'game script exists');
 const js=found[1],end=js.indexOf("  document.addEventListener('click', function(e){");
 assert.ok(end>0);
-const output=js.slice(0,end)+"\n globalThis.__gameTests={BATTER_SUBROLES,PITCHER_SUBROLES,currentPlayRole,buildPositionPlayEvent,buildClutchMomentEvent,isPositionEventEligible,simulateBatterSeason,simulatePitcherSeason,recomputeBatterDerived,recomputePitcherDerived,simulatePostseasonBracket,TEAMS,LIFE_SHOP,purchaseLifeItem,recordSeasonFanPosts,renderFanPosts,POSITION_PLAY_VARIATIONS,CAREER_GOALS,autoAssignGrowthFocus};\n})();";
+const output=js.slice(0,end)+"\n globalThis.__gameTests={BATTER_SUBROLES,PITCHER_SUBROLES,currentPlayRole,buildPositionPlayEvent,buildClutchMomentEvent,isPositionEventEligible,simulateBatterSeason,simulatePitcherSeason,recomputeBatterDerived,recomputePitcherDerived,simulatePostseasonBracket,TEAMS,LIFE_SHOP,purchaseLifeItem,recordSeasonFanPosts,renderFanPosts,POSITION_PLAY_VARIATIONS,CAREER_GOALS,autoAssignGrowthFocus,seasonMindset,teamLogoHtml,renderEventVisual,lifeItemArt,careerArt};\n})();";
 const sandbox={console,Math:Object.create(Math),document:{addEventListener(){}}};
 sandbox.Math.random=Math.random;sandbox.globalThis=sandbox;
 vm.createContext(sandbox);
@@ -153,4 +153,48 @@ test('Manual focus is respected and automatic fallback still rotates',()=>{
  assert.equal(g.autoAssignGrowthFocus(p),'defense');
  p.manualGrowthFocus=null;
  assert.ok(['power','contact','speed','defense','mental'].includes(g.autoAssignGrowthFocus(p)));
+});
+
+test('Morale, clubhouse and fan sentiment only nudge season performance, never raw stats',()=>{
+ const p=mk('포수');p.shopSeasonMood=0;p.teamRecord=null;p.teamRank=0;
+ assert.equal(g.seasonMindset(p).boost,0);
+ const original=JSON.stringify(p.stats);
+ p.momentum=1;p.shopSeasonMood=.4;p.teamRank=1;p.teamRecord={wins:110,losses:34};p.fanApproval=100;
+ const high=g.seasonMindset(p);
+ assert.ok(high.boost>0&&high.boost<=2);
+ p.momentum=-1;p.shopSeasonMood=-.4;p.teamRank=10;p.teamRecord={wins:20,losses:124};p.fanApproval=0;
+ const low=g.seasonMindset(p);
+ assert.ok(low.boost<0&&low.boost>=-2);
+ assert.equal(JSON.stringify(p.stats),original);
+ assert.match(html,/var focusAttemptsRaw=clamp\(3\.6\+sf\.perf\*1\.5/);
+ assert.match(html,/var growthPointsRaw = clamp\(12\.5\+sf\.perf\*7/);
+});
+test('Uploaded asset slots use predictable filenames without bundled art',()=>{
+ assert.match(g.teamLogoHtml('서울 코메츠'),/assets\/images\/teams\/seoul_comets\.webp/);
+ assert.match(g.teamLogoHtml('제주 드래곤테일즈'),/assets\/images\/teams\/jeju_dragontails\.webp/);
+ assert.match(g.renderEventVisual('trade'),/assets\/images\/categories\/trade\.webp/);
+ assert.match(g.renderEventVisual('performance'),/assets\/images\/categories\/performance\.webp/);
+ assert.match(g.renderEventVisual('승부처'),/assets\/images\/categories\/performance\.webp/);
+ assert.match(g.lifeItemArt({id:'sports_car',type:'luxury'}),/assets\/images\/life\/sports_car\.webp/);
+ assert.match(g.careerArt('retirement'),/assets\/images\/career\/retirement\.webp/);
+ assert.doesNotMatch(g.careerArt('unknown_scene'),/img/);
+});
+test('Fan community reacts to actual player season results without near-term repetitions',()=>{
+ const p=mk('선발');p.fanFeed=[];p.lifeLedger=[];p.history=[];p.fanApproval=55;
+ p.team={name:'대전 볼케이노스'};p.teamRank=2;
+ const topics=new Set();
+ for(let year=3;year<=8;year++){
+  p.careerYears=year;
+  let line={ip:168,era:year%2?2.7:5.9,k:175-year*3,bb:34,holds:0,saves:0,wins:12,losses:7};
+  p.history.push({year:year, line});
+  const posted=g.recordSeasonFanPosts(p,line,year===4?['최우수선수']:[]);
+  assert.ok(posted>=1&&posted<=5);
+  for(const item of p.fanFeed)topics.add(item.topic);
+ }
+ const texts=p.fanFeed.map(x=>x.text);
+ assert.ok(new Set(texts).size>=15,'More narrative variety than a short canned list');
+ assert.ok(topics.size>=5,'Several context-driven story themes');
+ assert.ok(texts.slice(-20).every((text,i,arr)=>arr.indexOf(text)===i));
+ assert.ok(g.renderFanPosts(p,4).includes('fan-tone'));
+ assert.ok(p.fanFeed.every(x=>x.kind==='시즌'));
 });
